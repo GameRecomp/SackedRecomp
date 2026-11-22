@@ -126,6 +126,8 @@ treatment = "lift"
 size = 819200
 sha256 = "4db465e6e42e9682822d014466b92715c803b1d0b79945b18c397fbd6ba770ef"
 variants = ["cd-de", "en", "hu", "pl", "ru"]
+[binary.discover]
+data = [{ start = 0x100713df, end = 0x100713f0 }] # dead tail after a throw, then alignment nops
 
 [[binary]]
 name = "ogg.dll"
@@ -163,6 +165,20 @@ treatment = "lift"
 size = 348160
 sha256 = "8094af5ee310714caebccaeee7769ffb08048503ba478b879edfef5f1a24fefe"
 variants = ["nl"]
+[binary.discover]
+returns = [0x7c345858]   # CRT x87 argument load: returns; a second entry follows each call to it
+no_return = [
+    0x7c348d15, # _amsg_exit
+    0x7c359a41, # terminate
+]
+# Four switches whose index tables (8 bytes each) the code bounds by a register.
+jump_tables = [
+    { at = 0x7c375fb1, table = 0x7c376070, count = 8 },
+    { at = 0x7c375fd7, table = 0x7c376080, count = 8 },
+    { at = 0x7c375ff7, table = 0x7c376090, count = 8 },
+    { at = 0x7c37601a, table = 0x7c3760a0, count = 8 },
+]
+data = [{ start = 0x7c379b48, end = 0x7c379ba8 }] # the debug directory and its CodeView record
 
 [[binary]]
 name = "msvcp71.dll"
@@ -171,3 +187,5 @@ treatment = "lift"
 size = 499712
 sha256 = "df96156f6a548fd6fe5672918de5ae4509d3c810a57bffd2a91de45a3ed5b23b"
 variants = ["nl"]
+[binary.discover]
+data = [{ start = 0x7c3cfc38, end = 0x7c3cfc98 }] # the debug directory and its CodeView record

@@ -47,6 +47,9 @@ treatment = "lift"
 size = 417792
 sha256 = "291ba2aa7563e3cecc4805deafc1998e7733bc0d171de349e794b06b554e5d1b"
 variants = ["cd-de"]
+[binary.discover]
+no_return = [0x004407b6] # CRT exit: returns only for other callers of the shared doexit
+returns = [0x00446245]   # CRT x87 argument load: returns; a second entry follows each call to it
 
 [[binary]]
 name = "crazyschool.exe"
@@ -56,6 +59,13 @@ size = 348160
 sha256 = "9ac9c1e2ef85b496c08217340b718abb49af32fed5ec3d91cc3b6be02bb8a826"
 variants = ["ru"]
 notes = "The Russian build (a week before the German one)."
+[binary.discover]
+no_return = [0x0042db93] # CRT exit: returns only for other callers of the shared doexit
+returns = [0x00431145]   # CRT x87 argument load: returns; a second entry follows each call to it
+data = [
+    { start = 0x00428710, end = 0x0042a200 }, # DirectInput data formats (DIOBJECTDATAFORMAT arrays)
+    { start = 0x00439ec2, end = 0x00439fd0 }, # 1C's Cyrillic glyph table, after .text's virtual size
+]
 
 [[binary]]
 name = "CRAZYSCHOOL.exe"
@@ -114,6 +124,13 @@ size = 1060864
 sha256 = "fefda850b69e007fceba644483c7616bc07e9f177fc634fb74e114f0d15b0db0"
 variants = ["pl"]
 base = 0x10100000
+[binary.discover]
+returns = [0x10117a15]   # CRT x87 argument load: returns; a second entry follows each call to it
+# CRT x87 error stubs that nothing references (the static CRT's transcendental dispatch)
+seeds = [
+    0x101178ab, 0x10117bce, 0x10117c28, 0x10117c2d, 0x10117c62, 0x10117b71,
+    0x1011a074, 0x1011a07a, 0x1011a07f, # FDIV check stubs, reached through a table in .data
+]
 
 [[binary]]
 name = "vorbisfile.dll"
