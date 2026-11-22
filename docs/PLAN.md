@@ -83,7 +83,7 @@ Status: ✅ done · 🔶 in progress · ⬜ not started
 |-----|------------------------------------|--------|----------------|
 | M0  | Foundation                         | ✅ | Shared code imported from HoMM4Recomp and renamed; Android and Heroes IV parts removed; CMake and Cargo build; CI and audit hook; `games/sacked/game.toml` and `games/crazyschool/game.toml` pin every medium and binary; `recomp identify` recognises them. |
 | M1  | Read the inputs                    | ✅ | `recomp extract` unpacks every pinned medium of both games (nine), and the installers inside them, into `orig/<game>/<variant>/` without third-party tools: the Inno installers byte-identical to innoextract 1.9, the Windows Installer package identical to cabextract, NSIS complete by its header's own file list, InstallShield 6 by its MD5s, every binary verified by hash. |
-| M2  | Find the code                      | 🔶 | Coverage report for all 20 pinned binaries: 100 % classified, every leftover settled by analysis or a manifest hint. |
+| M2  | Find the code                      | ✅ | Coverage report for all 20 pinned binaries: 100 % classified, every leftover settled by analysis or a manifest hint. |
 | M3  | Lift and build                     | ✅ | Every function lifts; no trap in reachable code; the generated C compiles warning-free (gcc, clang, MSVC in CI) and links into `sacked-sacked` and `sacked-crazyschool`. |
 | M4a | Crazy School boots                 | ✅ | CRT start-up, registry, files, threads; the game creates its window and sets a DirectDraw 7 mode. |
 | M4b | C runtime and Sacked boots         | 🔶 | `hle/msvcrt` and `hle/msvcp60` serve every import of the binaries that link them; C++ exceptions are thrown and caught (unit tests); Sacked reaches its window and display mode. |
@@ -167,8 +167,8 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 - [x] Bases for the rebased DLLs chosen so nothing collides
 - [x] 1C's patch to the Russian Crazy School: code and a glyph table after `.text`'s virtual size, in the rest of
       its last page; sections are now mapped to the end of that page (rc-pe and the loader)
-- [ ] The Polish Crazy School (MSVC 7.1): about 20 KB of unreferenced code and tables left (it runs; the
-      discovery test leaves it out) **(open)**
+- [x] The Polish Crazy School (MSVC 7.1): seeds for unreferenced functions and the DirectX error text functions;
+      two blocks protected from text in `.rdata` that reads as pointers into them
 
 ### M3 – Lift and build
 
