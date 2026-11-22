@@ -1,0 +1,125 @@
+# SPDX-License-Identifier: MIT
+# Manifest for Crazy School. Human-readable overview: docs/TARGETS.md
+schema = 1
+
+[game]
+id = "crazyschool"
+title = "Crazy School"
+title_de = "Crazy School – Die große Pause"
+engine = "limbic"
+
+[[variant]]
+id = "cd-de"
+store = "cd"
+language = "de"
+content = ["base"]
+notes = "German CD (2004) as archived on archive.org (item crazyschoolgame). Inno Setup 3.0.6.1 (isx) on the disc."
+media = [
+  { file = "CrazySchool.iso", kind = "iso", size = 122435584, sha256 = "702652d03bbd3feaad521bc8ccfbce6f5a68741bc9d4840a73462db80a830a16", url = "https://archive.org/download/crazyschoolgame/CrazySchool.iso" },
+]
+
+[[variant]]
+id = "ru"
+store = "cd"
+language = "ru"
+content = ["base"]
+notes = "Russian CD by 1C (\"Оторва в школе\", 2003) as archived on archive.org (item 2_20240726_20240726_0734): a raw MODE1/2352 CloneCD image with a Windows Installer package (.msi and data.cab). The .ccd, .sub and .cue beside it are not needed."
+media = [
+  { file = "Crazy School.img", kind = "iso", size = 98442960, sha256 = "1624b02ce7ec7c7244de69ed54a80d529c142d5b95592b3d5c293a1bec2ea79d", url = "https://archive.org/download/2_20240726_20240726_0734/Crazy%20School.img" },
+]
+
+[[variant]]
+id = "pl"
+store = "cd"
+language = "pl"
+content = ["base"]
+notes = "Polish release (\"Zemsta kujona\", 2004, a PC FUN cover CD), its Inno Setup 4.2.2 installer as archived on archive.org (item setup_20200415). A later build of the game (MSVC 7.1) with its own Vorbis DLLs."
+media = [
+  { file = "setup.exe", kind = "inno", size = 61869354, sha256 = "e6a54cc469b8ce7eb86cdb357b25e169862d46cd6f502ebe9e352768d93aea8a", url = "https://archive.org/download/setup_20200415/setup.exe" },
+]
+
+# --- executables -------------------------------------------------------------
+
+[[binary]]
+name = "crazyschool.exe"
+role = "main"
+treatment = "lift"
+size = 417792
+sha256 = "291ba2aa7563e3cecc4805deafc1998e7733bc0d171de349e794b06b554e5d1b"
+variants = ["cd-de"]
+
+[[binary]]
+name = "crazyschool.exe"
+role = "main"
+treatment = "lift"
+size = 348160
+sha256 = "9ac9c1e2ef85b496c08217340b718abb49af32fed5ec3d91cc3b6be02bb8a826"
+variants = ["ru"]
+notes = "The Russian build (a week before the German one)."
+
+[[binary]]
+name = "CRAZYSCHOOL.exe"
+role = "main"
+treatment = "lift"
+size = 798720
+sha256 = "d7ec2e7a5dc0b807f40d74f56e0dedb9265c374ff79d4d5ab680eebccedb2822"
+variants = ["pl"]
+notes = "The Polish build (2004-06), MSVC 7.1, statically linked CRT."
+
+# --- libraries -----------------------------------------------------------------
+# All three are linked for 0x10000000: vorbis.dll and vorbisfile.dll are moved.
+
+[[binary]]
+name = "ogg.dll"
+role = "library"
+treatment = "lift"
+size = 49152
+sha256 = "308540dbd488f3bceca2dbadefe02cf29d10a27c4ac096bb3da053e3e0b923ea"
+variants = ["cd-de", "ru"]
+
+[[binary]]
+name = "vorbis.dll"
+role = "library"
+treatment = "lift"
+size = 974848
+sha256 = "b4fa55cfe7547ade0a2d5b800ef085ce20cdd71f61898d2461ea61eb0241812b"
+variants = ["cd-de", "ru"]
+base = 0x10100000
+
+[[binary]]
+name = "vorbisfile.dll"
+role = "library"
+treatment = "lift"
+size = 28672
+sha256 = "f44472c6d9a64045c14583d12c0cfab5b4aa268aceb8bc9e3e1236b3008306f2"
+variants = ["cd-de", "ru"]
+base = 0x10200000
+
+# The Polish build's Vorbis DLLs (2003-11, statically linked CRT). Its vorbisenc.dll is installed
+# but not used by the game.
+
+[[binary]]
+name = "ogg.dll"
+role = "library"
+treatment = "lift"
+size = 36864
+sha256 = "4a4f65427e016b3c5ae0d2517a69db5f1cdc7a43d2c0a7957e8da5d6f378f063"
+variants = ["pl"]
+
+[[binary]]
+name = "vorbis.dll"
+role = "library"
+treatment = "lift"
+size = 1060864
+sha256 = "fefda850b69e007fceba644483c7616bc07e9f177fc634fb74e114f0d15b0db0"
+variants = ["pl"]
+base = 0x10100000
+
+[[binary]]
+name = "vorbisfile.dll"
+role = "library"
+treatment = "lift"
+size = 65536
+sha256 = "a08923479000cec366967fb8259e0920b7aa18859722c7dda1415726bed4774f"
+variants = ["pl"]
+base = 0x10300000

@@ -45,8 +45,10 @@ pub enum Engine {
     C1,
     /// The Cultures 2 engine (CulturesRecomp).
     C2,
-    /// Heroes of Might and Magic IV.
+    /// Heroes of Might and Magic IV (HoMM4Recomp).
     H4,
+    /// Limbic Entertainment's 2D engine: Sacked / Gefeuert!, Crazy School.
+    Limbic,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -68,6 +70,10 @@ pub struct Media {
     pub kind: MediaKind,
     pub size: u64,
     pub sha256: String,
+    /// Where the converter downloads the file (abandonware archived on archive.org); none for
+    /// media the user brings.
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -78,10 +84,12 @@ pub enum MediaKind {
     /// An external data slice of the Inno Setup installer in the same variant
     /// (`setup_….exe` keeps the headers, `setup_…-1.bin` the file data).
     Slice,
-    /// ISO 9660 CD image.
+    /// ISO 9660 CD image, cooked (`.iso`) or raw (`.bin` with 2352-byte sectors).
     Iso,
     /// Zip archive of an installed copy (the original directory layout, uncompressed or deflated).
     Zip,
+    /// Nullsoft (NSIS) installer.
+    Nsis,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -566,46 +574,51 @@ mod tests {
     fn all_manifests_are_consistent() {
         let ms = load_dir(&repo_games()).unwrap_or_else(|e| panic!("{e}"));
         let ids: Vec<_> = ms.iter().map(|m| m.game.id.as_str()).collect();
-        assert_eq!(ids, ["heroes4"]);
+        assert_eq!(ids, ["crazyschool", "sacked"]);
         let c = Catalog::new(&ms);
-        // One variant: the installer and its data slice; one main executable.
+        // Sacked in six languages, Crazy School in three; one medium each.
         let variants = ms.iter().flat_map(|m| &m.variants).count();
-        assert_eq!(variants, 1);
+        assert_eq!(variants, 9);
         let media = ms
             .iter()
             .flat_map(|m| &m.variants)
             .flat_map(|v| &v.media)
             .count();
-        assert_eq!(media, 2);
+        assert_eq!(media, 9);
+        // Every medium can be downloaded.
+        assert!(ms
+            .iter()
+            .flat_map(|m| &m.variants)
+            .flat_map(|v| &v.media)
+            .all(|m| m.url.as_deref().is_some_and(|u| u.starts_with("https://archive.org/download/"))));
         let mains: BTreeSet<_> = ms
             .iter()
             .flat_map(|m| &m.binaries)
             .filter(|b| matches!(b.role, Role::Main | Role::Alternate))
             .map(|b| b.sha256.as_str())
             .collect();
-        assert_eq!(mains.len(), 1);
+        // English and Hungarian share one build.
+        assert_eq!(mains.len(), 8);
         assert!(!c.is_empty());
     }
 
     #[test]
-    fn installer_slice_and_miles_are_known() {
+    fn the_cd_images_and_both_vorbis_builds_are_known() {
         let ms = load_dir(&repo_games()).unwrap();
         let c = Catalog::new(&ms);
-        let slice = c.lookup("f2a371b683d1af3ec1c8b7605deee168b18859b842f8b888b396900d891fadbb");
+        let bin = c.lookup("84d483e65bb506f5d832325815a95e04dc31d985d70dcf8ebaa18aee83c9e93e");
         assert!(matches!(
-            slice,
+            bin,
             [Hit::Media {
-                kind: MediaKind::Slice,
+                kind: MediaKind::Iso,
                 ..
             }]
         ));
-        let mss = c.lookup("2a515199cc7a2e1ccd8d756efdaab07cedd5c3052309ef1c7499c2560e2097bd");
-        assert_eq!(
-            mss.len(),
-            1,
-            "Mss32.dll (6.1c), the build CulturesRecomp replaces too"
-        );
-        assert!(c.is_known_size(348160));
+        // Two builds of ogg.dll, one per game, both 48 KiB.
+        let ogg = |h: &str| c.lookup(h).len();
+        assert_eq!(ogg("a391e1e2dbbb11f1c5041482223e8b014530649bccbf6c2cb95d9f173981445f"), 1);
+        assert_eq!(ogg("308540dbd488f3bceca2dbadefe02cf29d10a27c4ac096bb3da053e3e0b923ea"), 1);
+        assert!(c.is_known_size(49152));
         assert!(c.lookup(&"0".repeat(64)).is_empty());
     }
 

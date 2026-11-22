@@ -1,0 +1,173 @@
+# SPDX-License-Identifier: MIT
+# Manifest for Sacked: Your Last Day (German: Gefeuert! – Dein letzter Tag).
+# Human-readable overview: docs/TARGETS.md
+schema = 1
+
+[game]
+id = "sacked"
+title = "Sacked: Your Last Day"
+title_de = "Gefeuert! – Dein letzter Tag"
+engine = "limbic"
+
+[[variant]]
+id = "cd-de"
+store = "cd"
+language = "de"
+content = ["base"]
+notes = "German CD (2003) as archived on archive.org (item cdgefrtdlt): a raw MODE2/2352 image with an NSIS installer. The .cue beside it is not needed."
+media = [
+  { file = "sd-gefeg.bin", kind = "iso", size = 143641344, sha256 = "84d483e65bb506f5d832325815a95e04dc31d985d70dcf8ebaa18aee83c9e93e", url = "https://archive.org/download/cdgefrtdlt/sd-gefeg.bin" },
+]
+
+[[variant]]
+id = "en"
+store = "cd"
+language = "en"
+content = ["base"]
+notes = "English release (2003), its NSIS installer as archived on archive.org (item sacked_your_last_day_pc)."
+media = [
+  { file = "Setup.exe", kind = "nsis", size = 75160974, sha256 = "e77cb450636de1f6d6031856a2e67de5e8adb4178ec9e2bf3c59d6f506070f89", url = "https://archive.org/download/sacked_your_last_day_pc/Setup.exe" },
+]
+
+[[variant]]
+id = "hu"
+store = "cd"
+language = "hu"
+content = ["base"]
+notes = "Hungarian CD (\"Ki vagy rúgva!\", 2004) as archived on archive.org (item ki-vagy-rugva): the English build with Hungarian data, an NSIS installer on the disc."
+media = [
+  { file = "SACKED.ISO", kind = "iso", size = 75585536, sha256 = "685a8f35d77fa67e368a54fa81d1e065b361f00cc38fe2b46c3bb060b948bbaf", url = "https://archive.org/download/ki-vagy-rugva/SACKED.ISO" },
+]
+
+[[variant]]
+id = "pl"
+store = "cd"
+language = "pl"
+content = ["base"]
+notes = "Polish release (\"Zemsta Urzędasa\"), its NSIS installer as archived on archive.org (item zemsta-urze-dasa-1)."
+media = [
+  { file = "ZEMSTA URZĘDASA (1).exe", kind = "nsis", size = 75325442, sha256 = "c44c49a86c8d876cb92ebea447379aefd4aa6d0618eec4f961553d7e14ac0f57", url = "https://archive.org/download/zemsta-urze-dasa-1/ZEMSTA%20URZ%C4%98DASA%20%281%29.exe" },
+]
+
+[[variant]]
+id = "nl"
+store = "cd"
+language = "nl"
+content = ["base"]
+notes = "Dutch release (\"Ontslagen: Neem wraak op je laatste werkdag\", 2004), the CD's files zipped as archived on archive.org (item ontslagenneemwraakopjelaatstewerkdag): an Inno Setup 4.2.6 installer. A later build (MSVC 7.1) with the Visual C++ 7.1 runtime beside it. (The same CD as a raw image, item ontslagencdmdf, New.mdf, unpacks too but is 13 times larger.)"
+media = [
+  { file = "cd.zip", kind = "zip", size = 59020475, sha256 = "5587efe35f966aa4a55a5cc993bd8c7b811f76b751a586e6d594c8ca47ea7d11", url = "https://archive.org/download/ontslagenneemwraakopjelaatstewerkdag/cd.zip" },
+]
+
+[[variant]]
+id = "ru"
+store = "cd"
+language = "ru"
+content = ["base"]
+notes = "Russian CD by 1C (\"Оторва!\", 2003) as archived on archive.org (item sacked_202601): a raw MODE1/2352 CloneCD image with an InstallShield 6 setup (two cabinet volumes). The .ccd, .sub and .cue beside it are not needed."
+media = [
+  { file = "Sacked.img", kind = "iso", size = 138601008, sha256 = "bf9c851d4c1a02acbb62019a680400cb70579fbb5e87795e3df3d1031dd8fa00", url = "https://archive.org/download/sacked_202601/Sacked.img" },
+]
+
+# --- executables -------------------------------------------------------------
+
+[[binary]]
+name = "Gefeuert.exe"
+role = "main"
+treatment = "lift"
+size = 487424
+sha256 = "f1ddc93d9fa17ed9db4199139c58a19aea71e8e77317ed60085a518f1715d05d"
+variants = ["cd-de"]
+notes = "Links the system's MSVCRT.dll and MSVCP60.dll (HLE)."
+
+[[binary]]
+name = "sacked.exe"
+role = "main"
+treatment = "lift"
+size = 487424
+sha256 = "3d2b86d99ed5bf915aade9c0cda6a0ea5cafa6c0df6b1d845c0935617f78d437"
+variants = ["en", "hu"]
+notes = "The English build of Gefeuert.exe (a week later, the same layout)."
+
+[[binary]]
+name = "sacked.exe"
+role = "main"
+treatment = "lift"
+size = 479232
+sha256 = "6404096cc74e1c954daa2033a7d7d7826429a27deaa679f1ff7103027f614a86"
+variants = ["pl"]
+notes = "The Polish build (2003-02)."
+
+[[binary]]
+name = "Ontslagen.exe"
+role = "main"
+treatment = "lift"
+size = 479232
+sha256 = "93724b2ec5edb710cc85e18d84c07a28958ba056287de3d73880a00554e1a440"
+variants = ["nl"]
+notes = "The Dutch build (2004-08), MSVC 7.1, with MSVCR71.dll and MSVCP71.dll beside it (lifted)."
+
+[[binary]]
+name = "sacked.exe"
+role = "main"
+treatment = "lift"
+size = 493056
+sha256 = "e22fd18077c30dd9d5636771f4f5a2097bfbe3669e305bc161883727ad44e6d1"
+variants = ["ru"]
+notes = "The Russian build by 1C."
+
+# --- libraries -----------------------------------------------------------------
+# All four are linked for 0x10000000: the Vorbis DLLs are moved above STLport.
+
+[[binary]]
+name = "stlport_vc645.dll"
+role = "library"
+treatment = "lift"
+size = 819200
+sha256 = "4db465e6e42e9682822d014466b92715c803b1d0b79945b18c397fbd6ba770ef"
+variants = ["cd-de", "en", "hu", "pl", "ru"]
+
+[[binary]]
+name = "ogg.dll"
+role = "library"
+treatment = "lift"
+size = 49152
+sha256 = "a391e1e2dbbb11f1c5041482223e8b014530649bccbf6c2cb95d9f173981445f"
+variants = ["cd-de", "en", "hu", "pl", "nl", "ru"]
+base = 0x10200000
+
+[[binary]]
+name = "vorbis.dll"
+role = "library"
+treatment = "lift"
+size = 102400
+sha256 = "b594b271958676d3526e17db686e02d0f7e8ecb380582ffc8b9e09001d4a6801"
+variants = ["cd-de", "en", "hu", "pl", "nl", "ru"]
+base = 0x10300000
+
+[[binary]]
+name = "vorbisfile.dll"
+role = "library"
+treatment = "lift"
+size = 28672
+sha256 = "e5fd294664e08b7220cc4a620295594082861220ad6a805b92096e98c3a3905e"
+variants = ["cd-de", "en", "hu", "pl", "nl", "ru"]
+base = 0x10400000
+
+# The Dutch build's Visual C++ 7.1 runtime (installed beside the game; lifted at its own bases).
+
+[[binary]]
+name = "msvcr71.dll"
+role = "library"
+treatment = "lift"
+size = 348160
+sha256 = "8094af5ee310714caebccaeee7769ffb08048503ba478b879edfef5f1a24fefe"
+variants = ["nl"]
+
+[[binary]]
+name = "msvcp71.dll"
+role = "library"
+treatment = "lift"
+size = 499712
+sha256 = "df96156f6a548fd6fe5672918de5ae4509d3c810a57bffd2a91de45a3ed5b23b"
+variants = ["nl"]
