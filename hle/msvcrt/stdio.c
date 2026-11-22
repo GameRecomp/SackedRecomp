@@ -45,6 +45,9 @@
 #define INVALID_HANDLE 0xffffffffu
 
 #define BUF 65536u
+/* What a read for the buffer asks for, as MSVCRT's (its buffer is 4 KiB): small reads after a
+ * seek, the usual way through a game's archive, then fetch little. */
+#define FILL 4096u
 #define FILES 64
 
 typedef struct file {
@@ -146,7 +149,7 @@ static bool fill(rc_cpu *c, file *f)
     }
     f->buf_at += f->buf_len;
     f->buf_len = f->buf_pos = 0;
-    uint32_t a[5] = {f->handle, scratch, BUF, scratch_count, 0};
+    uint32_t a[5] = {f->handle, scratch, FILL, scratch_count, 0};
     if (!k32(c, "ReadFile", 5, a)) {
         f->err = true;
         return false;
@@ -345,14 +348,23 @@ static void k_fread(rc_cpu *c)
             rc_st8(dst + got++, (uint8_t)f->unget);
             f->unget = -1;
         }
-        uint32_t have = f->buf_len - f->buf_pos;
-        uint32_t k = have < want - got ? have : want - got;
-        if (k) {
+        /* As MSVCRT: through the buffer, filled as needed, but a read of the buffer's size or
+         * more straight into the program's buffer. One host read per fread was most of what a
+         * Sacked level spent in a browser, where each read goes through JavaScript. */
+        while (got < want) {
+            uint32_t have = f->buf_len - f->buf_pos;
+            if (!have) {
+                if (want - got >= FILL || !fill(c, f)) {
+                    break;
+                }
+                continue;
+            }
+            uint32_t k = have < want - got ? have : want - got;
             memcpy(rc_ptr(dst + got), f->buf + f->buf_pos, k);
             f->buf_pos += k;
             got += k;
         }
-        if (got < want && f->readable && f->handle != INVALID_HANDLE) {
+        if (got < want && !f->eof && f->readable && f->handle != INVALID_HANDLE) {
             /* The rest straight into the program's buffer. */
             f->buf_at += f->buf_len;
             f->buf_len = f->buf_pos = 0;
@@ -392,6 +404,14 @@ static void k_fseek(rc_cpu *c)
     if (origin == 1) {
         off += (int32_t)logical_pos(c, f);
         origin = 0;
+    }
+    /* A place in what is buffered: only the position there moves. */
+    if (origin == 0 && f->buf_len && off >= 0 && (uint32_t)off >= f->buf_at &&
+        (uint32_t)off <= f->buf_at + f->buf_len) {
+        f->buf_pos = (uint32_t)off - f->buf_at;
+        f->unget = -1;
+        f->eof = false;
+        RC_RETURN(c, 0, 0);
     }
     f->buf_len = f->buf_pos = 0;
     f->unget = -1;
