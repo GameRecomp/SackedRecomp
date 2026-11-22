@@ -46,6 +46,7 @@ typedef struct rc_event {
     int extended;
     int repeat;
     rc_event_source source; /* of a pointer event */
+    bool live;              /* from the host's devices, not from a script */
 } rc_event;
 
 /* Start the platform. False if there is no display (the null platform

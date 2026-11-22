@@ -817,6 +817,7 @@ static bool poll_sdl(rc_event *e)
             SDL_ConvertEventToRenderCoordinates(renderer, &ev);
         }
         SDL_zerop(e);
+        e->live = true;
         switch (ev.type) {
         case SDL_EVENT_FINGER_DOWN:
         case SDL_EVENT_FINGER_MOTION:

@@ -57,6 +57,13 @@ void rc_ddraw_mode(uint32_t *w, uint32_t *h);
 /* Whether a DirectDraw primary surface exists (the program shows itself through DirectDraw). */
 bool rc_ddraw_has_primary(void);
 
+/* A program that draws its own pointer, moved by DirectInput's relative mouse motion, keeps it at
+ * these guest addresses (32-bit x and y, in its screen's pixels). The mouse's state then reports
+ * the way from there to the host's pointer, so that the program's pointer is where the host's
+ * is (an absolute mouse, as in a window), rather than motion added up on its own. Moves from a
+ * script stay relative. A game project's patch says where (0: nowhere). */
+void rc_dinput_pointer_at(uint32_t x, uint32_t y);
+
 /* A display mode DirectDraw offers besides its own list (a game project's
  * resolution patch); 0 x 0 for none. */
 void rc_ddraw_extra_mode(uint32_t w, uint32_t h);

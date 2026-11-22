@@ -13,6 +13,8 @@
  *       FRAME key|keyup VK     a key, by Windows virtual-key code
  *       FRAME focus 0|1        the window loses (0) or gains (1) the focus,
  *                              as when the player switches to another program
+ *       FRAME live 0|1         the pointer events from here on count as the
+ *                              host's own (1) or as a script's (0, at first)
  *       FRAME fps N            from here on frames take at least 1/N s of the
  *                              virtual clock (as RC_CLOCK_FPS; 0: no pacing)
  *       FRAME area W H         the window becomes W x H (rc_plat_area_set)
@@ -71,6 +73,8 @@ static bool read_line(void)
     }
     return false;
 }
+
+static bool live; /* the script's pointer events count as the host's ("live") */
 
 static void run_script(unsigned frame)
 {
@@ -139,8 +143,10 @@ static void run_script(unsigned frame)
             e.down = a != 0;
         } else if (!strcmp(what, "area") || !strcmp(what, "touch") || !strcmp(what, "pen") ||
                    !strcmp(what, "mouse") || !strcmp(what, "wait") || !strcmp(what, "shot") ||
-                   !strcmp(what, "fps")) {
-            if (what[0] == 'f') {
+                   !strcmp(what, "fps") || !strcmp(what, "live")) {
+            if (what[0] == 'l') {
+                live = a != 0;
+            } else if (what[0] == 'f') {
                 rc_clock_set_fps((uint32_t)a);
             } else if (what[0] == 's' && what[1] == 'h') {
                 sscanf(next_line, "%*u %*s %239[^\r\n]", shot_path);
@@ -163,6 +169,7 @@ static void run_script(unsigned frame)
         }
         if (e.type != RC_EV_KEY && e.type != RC_EV_FOCUS) {
             e.source = source;
+            e.live = live;
         }
         rc_inject_event(&e);
         if (!read_line()) {

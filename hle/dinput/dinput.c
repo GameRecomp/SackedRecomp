@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "rc/hle_modules.h"
 #include "rc/log.h"
 #include "rc/platform.h"
 #include "rc/process.h"
@@ -62,6 +63,9 @@ static uint8_t keyboard[256];
 static int32_t mouse_dx, mouse_dy, mouse_dz;
 static uint8_t buttons[4];
 static int last_x = -1, last_y = -1;
+/* Where the program keeps its own pointer (rc_dinput_pointer_at), and where the host's is. */
+static uint32_t pointer_x, pointer_y;
+static bool host_pointer;
 static uint32_t sequence;
 static bool observing;
 
@@ -171,6 +175,7 @@ static void observe(const rc_event *e)
         }
         last_x = e->x;
         last_y = e->y;
+        host_pointer = e->live;
         break;
     case RC_EV_MOUSE_BUTTON: {
         int b = e->button == 1 ? 0 : e->button == 2 ? 1 : e->button == 3 ? 2 : 3;
@@ -191,6 +196,12 @@ static void observe(const rc_event *e)
     default:
         break;
     }
+}
+
+void rc_dinput_pointer_at(uint32_t x, uint32_t y)
+{
+    pointer_x = x;
+    pointer_y = y;
 }
 
 /* ---- IDirectInput ---- */
@@ -311,6 +322,9 @@ static void d_SetProperty(rc_cpu *c)
         uint32_t n = rc_ld32(RC_ARG(c, 2) + 16);
         o->buffer = n > EVENTS ? EVENTS : n;
         o->head = o->tail = 0;
+        if (rc_trace("dinput")) {
+            rc_log("dinput: %s buffers %u events", o->kind == K_MOUSE ? "mouse" : "keyboard", n);
+        }
     }
     RC_RETURN(c, DI_OK, 3);
 }
@@ -359,6 +373,11 @@ static void d_GetDeviceState(rc_cpu *c)
             RC_RETURN(c, DIERR_INVALIDPARAM, 3);
         }
         memset(rc_ptr(p), 0, n);
+        if (pointer_x && host_pointer) {
+            /* The way from the program's pointer to the host's: it is then where the host's is. */
+            mouse_dx = last_x - (int32_t)rc_ld32(pointer_x);
+            mouse_dy = last_y - (int32_t)rc_ld32(pointer_y);
+        }
         rc_st32(p, (uint32_t)mouse_dx);
         rc_st32(p + 4, (uint32_t)mouse_dy);
         rc_st32(p + 8, (uint32_t)mouse_dz);
