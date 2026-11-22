@@ -67,6 +67,13 @@ fn write_registry(ar: &dyn rc_media::Archive, dest: &Path) -> Result<(), String>
 }
 
 /// The same for a folder unpacked before (only the setup header is read).
+/// `recomp-variant.txt`: which release this is (several share an executable), for the runtime's
+/// language and code page, as the converter writes it.
+fn write_variant(dest: &Path, variant: &str) -> Result<(), String> {
+    let path = dest.join(rc_convert::install::VARIANT_FILE);
+    fs::write(&path, variant).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 pub(crate) fn write_installer_registry(media: &Path, dest: &Path) -> Result<(), String> {
     if dest.join("registry-install.txt").exists() {
         return Ok(());
@@ -176,6 +183,9 @@ pub fn extract(
         // registry entries, e.g. Cultures 2's serial), but leave the files alone.
         let had = dest.join("registry-install.txt").exists();
         write_installer_registry(media, &dest)?;
+        if let Some((_, v)) = variant {
+            write_variant(&dest, v)?;
+        }
         if had || !dest.join("registry-install.txt").exists() {
             println!(
                 "{}: already unpacked, nothing to add (--force unpacks again)",
@@ -197,6 +207,9 @@ pub fn extract(
         .map_err(|e| format!("extracting {}: {e}", media.display()))?;
     println!("{n} files written in {:.1}s", t0.elapsed().as_secs_f64());
     write_registry(ar.as_ref(), &dest)?;
+    if let Some((_, v)) = variant {
+        write_variant(&dest, v)?;
+    }
 
     let Some((m, v)) = variant else {
         return Ok(ExitCode::SUCCESS);

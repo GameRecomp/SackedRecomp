@@ -13,6 +13,9 @@ use crate::lift::Program;
 
 /// The file the runtime reads the installer's registry entries from (advapi32).
 pub const REGISTRY_FILE: &str = "registry-install.txt";
+/// The file that names the release (its variant id: "cd-de", "pl"), for the runtime's language
+/// and code page.
+pub const VARIANT_FILE: &str = "recomp-variant.txt";
 
 pub struct Install {
     pub installer: Box<dyn Archive>,
@@ -124,6 +127,7 @@ impl Install {
         if !self.registry.is_empty() {
             files.push((REGISTRY_FILE.into(), self.registry.len() as u64));
         }
+        files.push((VARIANT_FILE.into(), self.variant.len() as u64));
         (dirs, files)
     }
 
@@ -142,7 +146,8 @@ impl Install {
     }
 
     /// The game's files into `sink`: the directories, the installer's files, then the registry
-    /// entries the runtime reads (`registry-install.txt`).
+    /// entries the runtime reads (`registry-install.txt`) and the release's name
+    /// (`recomp-variant.txt`).
     pub fn files(&mut self, sink: &mut dyn Sink) -> Result<(), Error> {
         let err = |e: rc_media::Error| e.to_string();
         for d in self.dirs() {
@@ -157,6 +162,10 @@ impl Install {
             sink.write(self.registry.as_bytes()).map_err(err)?;
             sink.end().map_err(err)?;
         }
+        sink.begin(VARIANT_FILE, self.variant.len() as u64)
+            .map_err(err)?;
+        sink.write(self.variant.as_bytes()).map_err(err)?;
+        sink.end().map_err(err)?;
         Ok(())
     }
 }

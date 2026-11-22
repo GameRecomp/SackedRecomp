@@ -299,7 +299,18 @@ static const char *install_language(const char *game_dir, const char *variant)
         }
         free(text);
     }
-    /* "gog-de", "cd-de", or just "pl" */
+    /* "gog-de", "cd-de", or just "pl"; recomp-variant.txt (written by the converter and by recomp
+     * extract) names the release more exactly than its executable, which several share. */
+    char named[32] = "";
+    if (rc_host_resolve(game_dir, "recomp-variant.txt", false, path) && rc_host_exists(path, NULL, NULL)) {
+        uint32_t n = 0;
+        uint8_t *v = rc_host_read(path, &n);
+        if (v) {
+            snprintf(named, sizeof named, "%.*s", (int)(n < sizeof named - 1 ? n : sizeof named - 1), (const char *)v);
+            free(v);
+            variant = named;
+        }
+    }
     const char *dash = variant ? strrchr(variant, '-') : NULL;
     const char *code = dash ? dash + 1 : variant;
     for (size_t i = 0; code && i < sizeof langs / sizeof langs[0]; i++) {
