@@ -44,7 +44,7 @@ static void pad(out *o, char ch, int n)
 /* A double as MSVC 6 prints it: its exponents have three digits. */
 static int fmt_double(char *buf, size_t cap, char conv, int prec, const char *flags, double v)
 {
-    char spec[16];
+    char spec[32];
     snprintf(spec, sizeof spec, "%%%s.%d%c", flags, prec, conv);
     int n = snprintf(buf, cap, spec, v);
     if (n < 0 || (size_t)n >= cap) {
@@ -140,7 +140,7 @@ uint32_t rc_crt_format(char *buf, uint32_t cap, const char *fmt, uint32_t ap)
                 ap += 4;
                 v = (*p == 'd' || *p == 'i') ? (uint64_t)(int64_t)(int32_t)w : w;
             }
-            char spec[24];
+            char spec[40];
             const char *len = "ll";
             if (prec >= 0) {
                 snprintf(spec, sizeof spec, "%%%s.%d%s%c", flags, prec, len, *p);
