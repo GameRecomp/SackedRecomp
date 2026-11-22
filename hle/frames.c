@@ -13,6 +13,8 @@
  *       FRAME key|keyup VK     a key, by Windows virtual-key code
  *       FRAME focus 0|1        the window loses (0) or gains (1) the focus,
  *                              as when the player switches to another program
+ *       FRAME fps N            from here on frames take at least 1/N s of the
+ *                              virtual clock (as RC_CLOCK_FPS; 0: no pacing)
  *       FRAME area W H         the window becomes W x H (rc_plat_area_set)
  *       FRAME touch|pen|mouse  what the pointer events from here on come
  *                              from (a finger, a pen; at first the mouse)
@@ -136,8 +138,11 @@ static void run_script(unsigned frame)
             e.type = RC_EV_FOCUS;
             e.down = a != 0;
         } else if (!strcmp(what, "area") || !strcmp(what, "touch") || !strcmp(what, "pen") ||
-                   !strcmp(what, "mouse") || !strcmp(what, "wait") || !strcmp(what, "shot")) {
-            if (what[0] == 's' && what[1] == 'h') {
+                   !strcmp(what, "mouse") || !strcmp(what, "wait") || !strcmp(what, "shot") ||
+                   !strcmp(what, "fps")) {
+            if (what[0] == 'f') {
+                rc_clock_set_fps((uint32_t)a);
+            } else if (what[0] == 's' && what[1] == 'h') {
                 sscanf(next_line, "%*u %*s %239[^\r\n]", shot_path);
             } else if (what[0] == 'w') {
                 if (sscanf(next_line, "%*u %*s %239[^\r\n]", wait_path) == 1) {

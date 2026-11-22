@@ -433,6 +433,41 @@ static void remember_shown(const surface *s, const palette *p)
 
 bool rc_ddraw_has_primary(void) { return display.primary != 0; }
 
+/* RC_TRACE=fps: once a second, the frames the program presented and those drawn onto the window,
+ * and where the host's time went: converting the picture, handing it to the window (with vsync,
+ * the wait for the display), resting for the frame limit, and the rest (the program's own work,
+ * other threads, sound). */
+static struct {
+    uint64_t since, convert, show, rest;
+    unsigned presented, drawn;
+} fps_stat;
+
+static void fps_tick(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        on = rc_trace("fps");
+    }
+    if (!on) {
+        return;
+    }
+    uint64_t now = rc_host_us();
+    if (!fps_stat.since) {
+        fps_stat.since = now;
+        return;
+    }
+    uint64_t span = now - fps_stat.since;
+    if (span < 1000000u) {
+        return;
+    }
+    uint64_t busy = span - fps_stat.convert - fps_stat.show - fps_stat.rest;
+    rc_log("fps: %u presented, %u drawn in %.2f s; ms: convert %.0f, show %.0f, frame limit %.0f, program %.0f",
+           fps_stat.presented, fps_stat.drawn, (double)span / 1e6, (double)fps_stat.convert / 1e3,
+           (double)fps_stat.show / 1e3, (double)fps_stat.rest / 1e3, (double)busy / 1e3);
+    memset(&fps_stat, 0, sizeof fps_stat);
+    fps_stat.since = now;
+}
+
 /* The primary surface onto the window. */
 static void draw(void)
 {
@@ -445,6 +480,7 @@ static void draw(void)
     if (same_as_shown(s, p) && now - shown_at < SAME_FRAME_MS) {
         return;
     }
+    uint64_t t0 = rc_host_us();
     if (s->bpp == 16) {
         make_rgb16(s);
         for (uint32_t y = 0; y < s->h; y++) {
@@ -470,7 +506,11 @@ static void draw(void)
         }
     }
     remember_shown(s, p);
+    uint64_t t1 = rc_host_us();
     rc_plat_present(frame, (int)s->w, (int)s->h, (int)s->w);
+    fps_stat.convert += t1 - t0;
+    fps_stat.show += rc_host_us() - t1;
+    fps_stat.drawn++;
     shown_at = now;
 }
 
@@ -507,12 +547,20 @@ static void flush(rc_cpu *c)
     if (!pending || !display.primary) {
         return;
     }
+    /* The pace goes by the passes, not by what is drawn: a pass whose picture has not changed
+     * draws nothing (same_as_shown), and pacing by the last picture drawn would let such passes
+     * run unchecked: Sacked then makes over 200 passes a second, each moving its figures by a
+     * few milliseconds, and its picture changes only some ten times a second. */
     int max_fps = rc_plat_display_get().max_fps;
     if (max_fps > 0 && !rc_clock_virtual()) {
-        uint64_t due = shown_at + 1000u / (uint32_t)max_fps, now = rc_ticks_peek_ms();
+        static uint64_t paced_at;
+        uint64_t due = paced_at + 1000u / (uint32_t)max_fps, now = rc_ticks_peek_ms();
         if (now < due && due - now <= 1000u) {
+            uint64_t t0 = rc_host_us();
             rc_thread_sleep((uint32_t)(due - now));
+            fps_stat.rest += rc_host_us() - t0;
         }
+        paced_at = rc_ticks_peek_ms();
     }
     pending = 0;
     draw();
@@ -524,6 +572,8 @@ static void present(void)
         return;
     }
     frames++;
+    fps_stat.presented++;
+    fps_tick();
     rc_thread_work();
     uint64_t now = rc_ticks_peek_ms();
     presented_at = now;

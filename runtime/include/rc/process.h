@@ -110,6 +110,9 @@ void rc_sleep_ms(uint32_t ms);
 /* Whether the clock is virtual (RC_CLOCK=virtual): time passes only as
  * the program reads it or sleeps, not with the host's. */
 bool rc_clock_virtual(void);
+/* Microseconds on the host's monotonic clock, whatever RC_CLOCK says (for
+ * measuring the runtime itself). */
+uint64_t rc_host_us(void);
 /* rc_ticks_ms without advancing the virtual clock. */
 uint64_t rc_ticks_peek_ms(void);
 /* A frame has been presented. With the virtual clock and RC_CLOCK_FPS=N, it
@@ -118,6 +121,8 @@ uint64_t rc_ticks_peek_ms(void);
  * machine. Without RC_CLOCK_FPS, frames take only the time the program
  * reads. */
 void rc_clock_frame(void);
+/* RC_CLOCK_FPS from here on (0: frames take only the time read). */
+void rc_clock_set_fps(uint32_t fps);
 
 /* A small guest allocation that lives as long as the process. */
 uint32_t rc_proc_alloc(uint32_t size);

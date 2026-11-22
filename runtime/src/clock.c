@@ -60,6 +60,12 @@ static int is_virtual(void)
 
 bool rc_clock_virtual(void) { return is_virtual() != 0; }
 
+void rc_clock_set_fps(uint32_t fps)
+{
+    is_virtual(); /* (reads RC_CLOCK_FPS first, so this wins) */
+    frame_us = fps ? UINT64_C(1000000) / fps : 0;
+}
+
 void rc_clock_frame(void)
 {
     if (!is_virtual() || !frame_us) {
@@ -89,6 +95,23 @@ void rc_sleep_ms(uint32_t ms)
 #else
     struct timespec ts = {(time_t)(ms / 1000), (long)(ms % 1000) * 1000000L};
     nanosleep(&ts, NULL);
+#endif
+}
+
+uint64_t rc_host_us(void)
+{
+#if defined(_WIN32)
+    static LARGE_INTEGER freq;
+    LARGE_INTEGER now;
+    if (!freq.QuadPart) {
+        QueryPerformanceFrequency(&freq);
+    }
+    QueryPerformanceCounter(&now);
+    return (uint64_t)((double)now.QuadPart * 1e6 / (double)freq.QuadPart);
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000u + (uint64_t)ts.tv_nsec / 1000u;
 #endif
 }
 
