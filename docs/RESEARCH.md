@@ -65,6 +65,11 @@ Whether the localised game builds differ in code beyond their texts is **(open)*
   `RC_CLOCK_FPS=N` (scenario `FPS=N`) makes every presented frame take at least 1/N s: at 60, 1200 frames in
   the first level move its clock by exactly 20 seconds (00:05 to 00:25). Scenarios that play a level through
   use it; the others keep the old model and their references.
+- Sacked's first level in time mode, nothing pranked: the colleagues and the boss walk their rounds, and the
+  level ends between frame 21000 (clock 05:17) and 24000 with the "angel" screen (buttons "Hauptmenü" and
+  "Nochmal"). The game puts its pointer in the middle of that screen.
+- Crazy School's first level in time mode, nothing pranked: still running at frame 30000 (clock 07:47). Whether
+  the level has a time limit, or ends only through what the player does, is **(open)**.
 
 ## The browser download
 

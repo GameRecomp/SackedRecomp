@@ -222,6 +222,9 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 ### M7 – In game
 
 - [x] The first level of both games starts (scenarios `firstlevel`)
+- [x] Game time in scripted runs: frames paced at 60 per second on the virtual clock (`FPS=` in a scenario)
+- [x] Sacked's first level runs out in time mode (about 5½ minutes, nothing pranked): the end screen, and back
+      to the main menu (scenario `levelend`, 24600 frames)
 - [ ] Every level of Sacked (`Level_00`–`Level_19`) and of Crazy School (`Level_00`–`Level_20`), both modes
       ("Zeit", "Punkte"), the mini games
 - [ ] Every other language: the game starts (done) and a level is played
