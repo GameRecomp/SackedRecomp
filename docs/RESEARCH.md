@@ -5,22 +5,28 @@ appear here; disassembly, lifted or decompiled code never does.
 
 ## The media
 
-### Gefeuert (`sd-gefeg.bin` + `.cue`)
+### Sacked, German CD (`sd-gefeg.bin` + `.cue`)
 
 - One data track, `MODE2/2352`: raw 2352-byte sectors, Mode 2 Form 1, 2048 bytes of user data at offset 24 of
   each sector. The user data is an ISO 9660 volume `GEFEUERT` (125,075,456 bytes as a cooked image).
 - Contents: `Gefeuert_RC1.EXE` (the installer, also the `autorun.inf` target), `Gefeuert_RC1.ico`,
   `Gefeuert Website.url`, `DirectX/DX81{eng,ger,NTeng,NTger}.exe`, four wallpapers in `Desktop Hintergründe/`.
 - The installer is NSIS, branded "Limbic Installer (NSIS)". 7-Zip 23.01 does not open it (an older layout than
-  it knows). What is seen so far:
+  it knows). The layout (answered in M1; `rc-media/src/nsis.rs` describes it):
   - The first header is at file offset `0x8E00` (flags `0`, the `0xDEADBEEF` signature, `NullsoftInst`), header
     size 7944, data size 75,340,331, which ends exactly at the end of the file. No CRC flag.
   - The data starts with the header block: a 32-bit length with the top bit set for "compressed", then raw
     deflate (zlib without its wrapper), 7944 bytes once inflated. 175 blocks follow in the same form, the last
     one ending at the end of the file: one per installed file, in the order of the script.
   - The inflated header holds the string table (installer texts, directory and file names, registry keys) and
-    the entry table. Directories are written as `$INSTDIR\…` with a one-byte variable code in front. The opcode
-    numbering of this NSIS version is **(open)**; the strings point to the 1.9x–2.0 beta era.
+    the entry table. Directories are written as `$INSTDIR\…` with a one-byte variable code in front (`0xF3`
+    `$INSTDIR`, `0xF6` `$PROGRAMFILES`, `0xF7` `$SMPROGRAMS`). The header is 60 words (entry count in word 13,
+    section count in word 56), sections are five words (name, install types, first entry, entry count, KiB),
+    entries six (opcode and five parameters). Opcodes used: 1 return, 14 create directory (second parameter set:
+    also the output directory), 21 extract file (name, block offset from the end of the header block, file time),
+    42 shortcut, 50 write registry (root, key, name, value, type 1 = string), 61 write uninstaller. Two entries may
+    share a block. UI strings with umlauts collide with the variable codes (an old-NSIS limitation; only paths
+    and registry values are interpreted here).
   - Registry: `HKLM\SOFTWARE\Limbic Entertainment\Gefeuert` `Install_Dir` = the install folder; an uninstall
     entry; start menu shortcuts.
   - Files: `CO_*.OGD`, `co_objects.dat`, `Gefeuert.exe`, `International.ttf`, `ogg.dll`, `stlport_vc645.dll`,
@@ -32,20 +38,35 @@ appear here; disassembly, lifted or decompiled code never does.
 - ISO 9660 volume `CRAZYSCHOOL`: `CrazySchool_Setup.exe`, `Autostart.exe` (the CD launcher), `liesmich.txt`,
   `DirectX/DX81*.exe` (the same four files as on the Gefeuert CD).
 - The installer is Inno Setup 3.0.6.1 ("My Inno Setup Extensions", isx), one language. 204 files, 236 MB
-  installed. File data in zlib blocks (`zlb\x1a`). innoextract 1.9 reads it; `rc-media` (Inno 5.5/5.6 only) does
-  not yet.
-- The installer's registry entries **(open)**; the game reads and writes
+  installed. File data in zlib blocks (`zlb\x1a`), one per file, each checked by Adler-32. Read by
+  `rc-media/src/inno3.rs` (M1), byte-identical to innoextract 1.9.
+- The installer writes `HKLM\SOFTWARE\LIMBIC\CRAZYSCHOOL` `INSTALL_DIR` = `{app}`; the game reads and writes
   `HKLM\SOFTWARE\Limbic Entertainment\Crazy School` itself.
+
+### The other languages
+
+| Game | Variant | Medium | Installer | Notes |
+|------|---------|--------|-----------|-------|
+| Sacked | `en` | NSIS exe | NSIS 1.9x, as German | `sacked.exe`: link time 2002-10-21, the German exe's layout (same entry, same sections), rebuilt with English texts |
+| Sacked | `hu` | ISO 9660 | NSIS 1.9x | the English `sacked.exe` (same hash), Hungarian data |
+| Sacked | `pl` | NSIS exe | NSIS 1.9x | own `sacked.exe` (2003-02-24, 479,232 bytes) |
+| Sacked | `nl` | zip of the CD | Inno Setup 4.2.6, LZMA1, one solid chunk | `Ontslagen.exe` (2004-08-09) built with **MSVC 7.1**, linking `MSVCR71.dll` and `MSVCP71.dll` (shipped beside it) instead of MSVCRT and STLport. The CD carries SafeDisc driver files (`SECDRV.SYS`, `DrvMgt.dll`) for its autorun, but the game exe is plain (normal sections, no wrapper) |
+| Sacked | `ru` | raw MODE1/2352 CloneCD image | InstallShield 6 (`DATA1.HDR`, `DATA1.CAB`, `DATA2.CAB`) | own `sacked.exe` (493,056 bytes) by 1C; the setup also installs InstallShield engine files beside the game |
+| Crazy School | `ru` | raw MODE1/2352 CloneCD image | Windows Installer (InstallShield Developer 7): `Оторва в школе.msi` (code page 1251) + `data.cab` (40 MSZIP folders, 203 files) | own `crazyschool.exe` (2003-08-06, 348,160 bytes), the German Vorbis DLLs |
+| Crazy School | `pl` | Inno exe | Inno Setup 4.2.2, three UI languages, LZMA1 solid chunk, executables with the 4.1.8 call filter | `CRAZYSCHOOL.exe` (2004-06-03, 798,720 bytes) built with **MSVC 7.1**, static CRT; own Vorbis DLLs (2003-11, static CRT) and an unused `vorbisenc.dll` |
+
+The Vorbis DLLs of Sacked are the same in every language (one build); Crazy School has two builds (de/ru and pl).
+Whether the localised game builds differ in code beyond their texts is **(open)** (M2: `recomp codediff`).
 
 ## The browser download
 
 - Both files are served by archive.org through a redirect (`archive.org/download/<item>/<file>` → a mirror
   `dnNNNNNN.ca.archive.org/0/items/<item>/<file>`) and honour `Range` requests (206).
 - From `curl` with an `Origin` header, neither the redirect nor the mirror answered with
-  `Access-Control-Allow-Origin` (2026-11-22). Whether a browser's request gets CORS headers is **(open)**;
-  checked in M1 with a real browser.
+  `Access-Control-Allow-Origin` (2026-11-22). The maintainer reports that the browser download works; checked
+  with a real browser in M8 **(open)**.
 
-## Gefeuert.exe
+## Gefeuert.exe (Sacked, German)
 
 - PE32 GUI, linker 6.0 (MSVC 6), link time 2002-10-14, image base `0x400000`, entry `0x46230C`, **no
   relocations**. `.text` `0x401000` (0x649BB bytes), `.rdata` `0x466000`, `.data` `0x46D000` (0x257D4 virtual),

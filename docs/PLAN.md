@@ -3,8 +3,10 @@
 ## Goals
 
 1. **Two games of Limbic Entertainment's 2D engine run natively** from their original executables:
-   *Gefeuert! – Dein letzter Tag* (2003) and *Crazy School – Die große Pause* (2004), both the German CD releases
-   (see [TARGETS.md](TARGETS.md)). They share one engine, so one runtime and one set of fixes serves both.
+   *Sacked: Your Last Day* / *Gefeuert! – Dein letzter Tag* (2003) and *Crazy School – Schulverweis!*
+   (2003/04), in every language archived on archive.org: Sacked in German, English, Hungarian, Polish, Dutch and
+   Russian, Crazy School in German, Russian and Polish (see [TARGETS.md](TARGETS.md)). They share one engine, so
+   one runtime and one set of fixes serves all of them.
 2. **Platforms: Windows, Linux and the browser (WebAssembly).** macOS is built in CI but not offered
    (`platforms.json`, as in the sister projects). **No Android build**: the Android project, its packaging and
    its converter target are not taken over.
@@ -16,33 +18,35 @@
    patch** (the sister projects' `widescreen.c`-style patches are not planned here). Window scaling stays what the
    shared platform layer does for every game.
 6. **Abandonware download built in.** Both games are offered on archive.org. The converter (CLI and browser page)
-   fetches the CD images from there itself, checks them against the pinned SHA-256 and converts them; a local
-   copy of the same image is accepted too.
+   fetches the medium of the chosen language from there itself (the page offers the languages as flags), checks
+   it against the pinned SHA-256 and converts it; a local copy of the same file is accepted too.
 
 Non-goals: shipping game code or data, remastering assets, resolution/widescreen patches, Android, other
 releases than the pinned ones until their hashes are known.
 
 ## Starting point
 
-This repository is the fourth project on the same toolchain. Everything below "the game" is already written:
+This repository (SackedRecomp, first named GefeuertRecomp) is the fourth project on the same toolchain. Everything below "the game" is already written:
 
 | Piece | Source | Work here |
 |-------|--------|-----------|
 | `rc-pe`, `rc-manifest`, `rc-discover`, `rc-ir`, `rc-x86`, `rc-emit-c`, `rc-difftest` | HoMM4Recomp | C++ EH `FuncInfo` reached through an **imported** `__CxxFrameHandler`; small binaries |
-| `rc-media` (Inno 5.5/5.6, LZMA, ISO 9660, InstallShield, zip) | HoMM4Recomp | **raw 2352-byte CD images (bin/cue)**, **NSIS (Limbic's old build)**, **Inno Setup 3.0.6.1 (zlib)**, an installer read from inside a CD image |
+| `rc-media` (Inno 5.5/5.6, LZMA, ISO 9660, InstallShield 5, zip) | HoMM4Recomp | **raw 2352-byte CD images** (bin, CloneCD img, mdf), **NSIS (1.9x)**, **Inno Setup 3.0.6.1, 4.2.2, 4.2.6**, **Windows Installer + cabinet (MSZIP)**, **InstallShield 6** (spanned volumes), installers read from inside a CD image or zip |
 | `rc-emit-native`, `rc-emit-wasm`, `rc-convert`, `rc-web` | HoMM4Recomp | two games, **download from archive.org**, no Android target |
 | `runtime/` (memory, CPU, x87, dispatch, loader, SEH, threads, clock, host files) | HoMM4Recomp | C++ exceptions thrown and caught across lifted code and HLE |
 | `hle/` kernel32, user32, gdi32, advapi32, ole32, ddraw (+D3D7), dinput, dsound, winmm, … | HoMM4Recomp | **new `msvcrt` and `msvcp60` modules**, `DirectInputCreateEx`, mmio, keyboard layout calls, a private font |
+| (lifted) | – | the Dutch build's own `msvcr71.dll`/`msvcp71.dll`, lifted like the Vorbis DLLs |
 | `platform/` SDL3 + null | all three | none expected |
-| `web/`, `tools/`, `.github/workflows` | HoMM4Recomp | rename, two games, download button, no Android |
+| `web/`, `tools/`, `.github/workflows` | HoMM4Recomp | rename, two games, language flags that download the medium, no Android |
 
 **HoMM4Recomp is the template** (the newest of the three; it contains CulturesRecomp's and TropicoRecomp's
 shared code plus SEH dispatch, the two-file converter and the browser player). The code is copied at a pinned
 commit (decision log), not vendored as a submodule.
 
-The games, measured from the archive.org images (details in [RESEARCH.md](RESEARCH.md)):
+The games, measured from the German archive.org images (details and the other languages in
+[RESEARCH.md](RESEARCH.md)):
 
-- **Gefeuert**: `sd-gefeg.bin` is a raw CD image (MODE2/2352) with an NSIS installer ("Limbic Installer (NSIS)",
+- **Sacked** (German CD): `sd-gefeg.bin` is a raw CD image (MODE2/2352) with an NSIS installer ("Limbic Installer (NSIS)",
   an old NSIS build that 7-Zip does not open). `Gefeuert.exe`: PE32, MSVC 6, base `0x400000`, no relocations,
   `.text` 0.39 MiB. It links the C runtime **dynamically** (`MSVCRT.dll`, 56 imports) and STLport
   (`stlport_vc645.dll`, shipped, 20 imports), plays music through `vorbisfile.dll` → `vorbis.dll` → `ogg.dll`
@@ -55,20 +59,20 @@ The games, measured from the archive.org images (details in [RESEARCH.md](RESEAR
 
 Measured against HoMM4Recomp's HLE layer, the system imports the two executables still lack are few:
 `GetKeyboardLayout`, `MapVirtualKeyExA`, `ToAsciiEx`, `mmioOpenA`, `mmioRead`, `mmioAscend`,
-`AddFontResourceA`, `DirectInputCreateEx`. The large new piece is `MSVCRT.dll` (used by `Gefeuert.exe`,
+`AddFontResourceA`, `DirectInputCreateEx`. The large new piece is `MSVCRT.dll` (used by Sacked's executables,
 STLport and all six Vorbis DLLs) with the C++ exception machinery.
 
 ## Order of work
 
 ```
  M0 ─ M1 ─ M2 ─ M3 ─┬─ M4a Crazy School boots (static CRT) ─┐
-                    └─ M4b msvcrt + C++ EH → Gefeuert boots ─┴─ M5 ─ M6 ─ M7 ─ M9 release
+                    └─ M4b msvcrt + C++ EH → Sacked boots ───┴─ M5 ─ M6 ─ M7 ─ M9 release
                                                                     └─ M8 converter, packages, browser
 ```
 
 Both games go through M0–M3 together: the binaries are small, and the work is shared. **Crazy School leads from
 M4**, because it needs no new C runtime: it proves the shared stack (DirectDraw 7, DirectInput 7, DirectSound,
-Vorbis DLLs) on this engine while `msvcrt` is written for Gefeuert. From M5 on, every engine fix serves both.
+Vorbis DLLs) on this engine while `msvcrt` is written for Sacked. From M5 on, every engine fix serves both.
 M8 starts early in a reduced form (CLI convert with download for Linux), as in HoMM4Recomp.
 
 ## Milestones
@@ -77,79 +81,88 @@ Status: ✅ done · 🔶 in progress · ⬜ not started
 
 | #   | Milestone                          | Status | Exit criterion |
 |-----|------------------------------------|--------|----------------|
-| M0  | Foundation                         | ⬜ | Shared code imported from HoMM4Recomp and renamed; Android and Heroes IV parts removed; CMake and Cargo build; CI and audit hook; `games/gefeuert/game.toml` and `games/crazyschool/game.toml` pin every image and binary; `recomp identify` recognises them. |
-| M1  | Read the inputs                    | ⬜ | `recomp extract` unpacks both CD images, and the installers inside them, into `orig/<game>/cd-de/` without third-party tools: Crazy School byte-identical to innoextract 1.9, Gefeuert complete by the NSIS header's own file list, every binary verified by hash. `--check` lists the missing imports. |
-| M2  | Find the code                      | ⬜ | Coverage report for all nine binaries: 100 % classified, every leftover settled by analysis or a manifest hint. |
-| M3  | Lift and build                     | ⬜ | Every function lifts; no trap in reachable code; the generated C compiles warning-free (gcc, clang, MSVC in CI) and links into `gefeuert-gefeuert` and `gefeuert-crazyschool`. |
+| M0  | Foundation                         | ✅ | Shared code imported from HoMM4Recomp and renamed; Android and Heroes IV parts removed; CMake and Cargo build; CI and audit hook; `games/sacked/game.toml` and `games/crazyschool/game.toml` pin every medium and binary; `recomp identify` recognises them. |
+| M1  | Read the inputs                    | ✅ | `recomp extract` unpacks every pinned medium of both games (nine), and the installers inside them, into `orig/<game>/<variant>/` without third-party tools: the Inno installers byte-identical to innoextract 1.9, the Windows Installer package identical to cabextract, NSIS complete by its header's own file list, InstallShield 6 by its MD5s, every binary verified by hash. |
+| M2  | Find the code                      | ⬜ | Coverage report for all 20 pinned binaries: 100 % classified, every leftover settled by analysis or a manifest hint. |
+| M3  | Lift and build                     | ⬜ | Every function lifts; no trap in reachable code; the generated C compiles warning-free (gcc, clang, MSVC in CI) and links into `sacked-sacked` and `sacked-crazyschool`. |
 | M4a | Crazy School boots                 | ⬜ | CRT start-up, registry, files, threads; the game creates its window and sets a DirectDraw 7 mode. |
-| M4b | C runtime and Gefeuert boots       | ⬜ | `hle/msvcrt` and `hle/msvcp60` serve every import of the nine binaries; C++ exceptions are thrown and caught (unit tests); Gefeuert reaches its window and display mode. |
+| M4b | C runtime and Sacked boots         | ⬜ | `hle/msvcrt` and `hle/msvcp60` serve every import of the binaries that link them; C++ exceptions are thrown and caught (unit tests); Sacked reaches its window and display mode. |
 | M5  | Picture and input                  | ⬜ | Both main menus render; mouse and keyboard (DirectInput 7 and window messages) work; text in `International.ttf`; windowed and full screen. |
 | M6  | Sound and music                    | ⬜ | DirectSound effects and speech (WAV through mmio), Ogg music through the lifted Vorbis DLLs. |
-| M7  | In game                            | ⬜ | Every level of both games can be played through; high scores and progress are saved and loaded; scripted soak runs (`tools/run-scenario`) without trap. |
-| M8  | Converter and platforms            | ⬜ | `recomp convert` and the browser page download (or take) the images and produce Windows and Linux builds and a browser build; all start and reach a level. |
+| M7  | In game                            | ⬜ | Every level of both games can be played through (German first, then each language starts and plays a level); high scores and progress are saved and loaded; scripted soak runs (`tools/run-scenario`) without trap. |
+| M8  | Converter and platforms            | ⬜ | `recomp convert` and the browser page download (or take) the medium of the chosen language and produce Windows and Linux builds and a browser build; all start and reach a level. |
 | M9  | **Release v0.1**                   | ⬜ | Both games played through on Linux, Windows and in the browser; release notes with the known issues. |
 
 ### M0 – Foundation
 
-- [ ] Copy from HoMM4Recomp at a pinned commit (decision log): `recomp/` (all crates), `runtime/`, `hle/`,
+- [x] Copy from HoMM4Recomp at a pinned commit (decision log): `recomp/` (all crates), `runtime/`, `hle/`,
       `platform/`, `cmake/`, `third_party/`, `tools/`, `web/`, `.github/`, `.clang-format`, `.editorconfig`,
       `.gitattributes`, `CMakePresets.json`, `CONTRIBUTING.md`
-- [ ] **Not** taken over: `android/`, `tools/build-android`, the Android CI jobs and release assets, the APK
+- [x] **Not** taken over: `android/`, `tools/build-android`, the Android CI jobs and release assets, the APK
       choice on the page and in `rc-convert`; `games/heroes4/` with `widescreen.c` and its patch points
-- [ ] Shared modules the games do not use (`dmusic`, `dshow`, `dplay`, `mss32`, `wsock`, D3D7, Bink support)
+- [x] Shared modules the games do not use (`dmusic`, `dshow`, `dplay`, `mss32`, `wsock`, D3D7, Bink support)
       stay in the tree, so the code stays the same as in the sister projects
-- [ ] Rename: project `gefeuertrecomp`, CLI help, window titles, user directory (`gefeuertrecomp/<game>`), web
-      page, AppImage names, release asset names (`GefeuertRecomp-converter-<system>-<arch>`); `platforms.json`
+- [x] Rename: project `sackedrecomp`, CLI help, window titles, user directory (`sackedrecomp/<game>`), web
+      page, AppImage names, release asset names (`SackedRecomp-converter-<system>-<arch>`); `platforms.json`
       `android: false`
-- [ ] `games/gefeuert/game.toml` and `games/crazyschool/game.toml`: the image(s), the installer inside, every
-      binary with role and treatment (below), the archive.org source (item id, file name, size, SHA-256);
-      `rc_add_game(gefeuert …)` → `gefeuert-gefeuert`, `rc_add_game(crazyschool …)` → `gefeuert-crazyschool`
-- [ ] `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT.md`, `README.md`, `CLAUDE.md` adapted from HoMM4Recomp
-- [ ] `tools/audit.sh`, `tools/hooks/` (pre-commit, commit-msg) enabled; `.gitignore` covers `orig/`,
+- [x] `games/sacked/game.toml` and `games/crazyschool/game.toml`: every medium with its archive.org download
+      URL, size and SHA-256, every binary with role and treatment (below); `rc_add_game(sacked …)` →
+      `sacked-sacked`, `rc_add_game(crazyschool …)` → `sacked-crazyschool`
+- [x] `README.md`, `CLAUDE.md` adapted from HoMM4Recomp
+- [ ] `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT.md` adapted (with M3, when the build is known)
+- [x] `tools/audit.sh`, `tools/hooks/` (pre-commit, commit-msg) enabled; `.gitignore` covers `orig/`,
       `generated/`, `*.bin`, `*.iso`, `*.cue`, the games' data extensions
-- [ ] CI as in the sister projects (audit, Rust fmt/clippy/test, C build and tests with the null platform on
+- [x] CI as in the sister projects (not run: nothing pushed yet) (audit, Rust fmt/clippy/test, C build and tests with the null platform on
       Linux, Windows, macOS; web build), without Android
-- [ ] Icons (`tools/icons/gefeuert.svg`, `tools/icons/crazyschool.svg`, our own drawings, no game art)
+- [x] Icons (`tools/icons/sacked.svg`, `tools/icons/crazyschool.svg`, our own drawings, no game art)
 
 Binary treatment:
 
 | Game | File | Role | Treatment | Why |
 |------|------|------|-----------|-----|
-| both | `Gefeuert.exe`, `crazyschool.exe` | main | lift | the games |
-| gefeuert | `stlport_vc645.dll` | library | lift | shipped with the game; C++ library code the game calls into (2062 exports) |
-| both | `ogg.dll`, `vorbis.dll`, `vorbisfile.dll` | library | lift | shipped; narrow API below them (MSVCRT); two different builds (one per game), each pinned |
-| gefeuert | `MSVCRT.dll`, `MSVCP60.dll` | system | **hle** (new) | Windows system DLLs, not shipped; must be replaced |
-| – | `DirectX/DX81*.exe`, `Autostart.exe`, `uninstall.exe`, wallpapers | – | skip | DirectX redistributable, CD launcher, uninstaller |
+| both | `Gefeuert.exe`, `sacked.exe` (×3), `Ontslagen.exe`, `crazyschool.exe` (×2), `CRAZYSCHOOL.exe` | main | lift | the games: eight builds |
+| sacked | `stlport_vc645.dll` | library | lift | shipped with the game; C++ library code the game calls into (2062 exports) |
+| both | `ogg.dll`, `vorbis.dll`, `vorbisfile.dll` | library | lift | shipped; narrow API below them (MSVCRT or a static CRT); three different builds, each pinned |
+| sacked/nl | `msvcr71.dll`, `msvcp71.dll` | library | lift | shipped with the Dutch build; only kernel32 below them |
+| sacked | `MSVCRT.dll`, `MSVCP60.dll` | system | **hle** (new) | Windows system DLLs, not shipped; must be replaced |
+| – | `DirectX/DX81*.exe`, launchers, installer engines, `uninstall.exe`, wallpapers | – | skip | DirectX redistributable, CD launchers, InstallShield engine files, uninstaller |
 
-All six Vorbis DLLs and STLport have the image base `0x10000000`: they are rebased by the manifest's `base`
+All Vorbis DLLs and STLport have the image base `0x10000000`: they are rebased by the manifest's `base`
 (the shared mechanism HoMM4Recomp uses for `binkw32.dll` and `Mp3dec.asi`). Lifting the Vorbis DLLs instead of
 replacing `vorbisfile` with a native decoder keeps the code faithful and avoids reimplementing
 `ov_open_callbacks`, which calls back into the game.
 
 ### M1 – Read the inputs
 
-- [ ] `rc-media`: raw CD images. A `.bin` with 2352-byte sectors (sync pattern detected; Mode 1 user data at
-      offset 16, Mode 2 Form 1 at 24) is read as the ISO 9660 image it contains; the `.cue` is optional and only
-      named in the manifest. Gefeuert's image is MODE2/2352
-- [ ] Nested media: an installer read from inside a CD image without unpacking the image to disk (streaming,
-      as the browser needs it)
-- [ ] `rc-media`: **NSIS, Limbic's build** (header at file offset `0x8E00`, raw-deflate header block and one
-      raw-deflate block per file, no CRC flag). Parse the header's sections and entries for the file list: output
-      directory changes, file extractions (name, data offset, time), registry writes; the opcode numbering of this
-      NSIS version is **(open)**. No reference extractor opens it (7-Zip 23 refuses it): verify by the header's own
-      list (every data block used exactly once, every deflate stream ends at its block end) and the binaries'
-      hashes
-- [ ] `rc-media`: **Inno Setup 3.0.6.1** (isx, "My Inno Setup Extensions Setup Data (3.0.6.1)"): the 3.0 header
-      and entry layouts, zlib chunks (`zlb\x1a`), its checksums. Verified byte-identical against innoextract 1.9
-- [ ] Registry entries the installers write → `registry-install.txt`: Gefeuert
-      `HKLM\SOFTWARE\Limbic Entertainment\Gefeuert` `Install_Dir`; Crazy School's keys **(open)**
-- [ ] Ignored tests `orig_extract` for both images in `orig/`
-- [ ] `gefeuert-<game> --check` loads the executable and lists unimplemented imports
+- [x] `rc-media`: raw CD images (`rawcd`): a file of 2352-byte sectors (sync pattern, Mode 1 data at offset 16,
+      Mode 2 Form 1 at 24) is read as the ISO 9660 image it holds: `.bin` (MODE2), CloneCD `.img` (MODE1),
+      Alcohol `.mdf` (MODE1); the `.cue`/`.ccd`/`.sub`/`.mds` files are not needed
+- [x] Nested media: an installer read from inside a CD image (shared readers for several files of one image) or
+      from inside a zip (read into memory), without unpacking to disk
+- [x] `rc-media`: **NSIS 1.9x** (`nsis`): first header, raw-deflate blocks, the header's sections and entries
+      (opcodes 14 create directory / output directory, 21 extract, 50 write registry, 42 shortcut, 61 uninstaller,
+      1 return), string variables (`0xF3` = `$INSTDIR`). Verified by the header's own list (every block used,
+      every deflate stream ending at its block end) and the binaries' hashes; four installers (de, en, hu, pl)
+- [x] `rc-media`: **old Inno Setup** (`inno3`): 3.0.6.1 (isx, zlib, Adler-32), 4.2.2 and 4.2.6 (LZMA1 solid
+      chunks, MD5, the 4.1.8 call filter). Byte-identical to innoextract 1.9 for all three installers
+- [x] `rc-media`: **Windows Installer** (`cfb`, `msi`, `cab`): compound file, string pool, `_Columns`, the File,
+      Component, Directory, Media and Registry tables; external cabinet with MSZIP folders (own window handling on
+      miniz_oxide). Identical to cabextract's output for the Russian Crazy School
+- [x] `rc-media`: **InstallShield 6** (`iscab`): 0x57-byte file descriptors, 64-bit sizes, MD5 per file, linked
+      files, files spanning `DATA1.CAB`/`DATA2.CAB`; version 5 kept working
+- [x] Registry entries the installers write → `registry-install.txt` (NSIS: `HKLM\SOFTWARE\Limbic
+      Entertainment\Gefeuert|Sacked` `Install_Dir`; Inno: `HKLM\SOFTWARE\LIMBIC\CRAZYSCHOOL` or
+      `HKLM\Software\Limbic` `INSTALL_DIR`)
+- [x] Manifests carry each medium's download URL; `recomp identify` recognises all nine media
+- [ ] Ignored tests `orig_extract` for every medium in `orig/` (with M2's `orig_discover`)
+- [ ] `sacked-<game> --check` lists unimplemented imports (with M3)
 
 ### M2 – Find the code
 
-- [ ] Discovery on `Gefeuert.exe`, `crazyschool.exe`, `stlport_vc645.dll` and the six Vorbis DLLs with the
-      shared rules; for the DLLs with and without their relocations
+- [ ] Discovery on the eight game builds, `stlport_vc645.dll`, `msvcr71.dll`, `msvcp71.dll` and the nine Vorbis
+      DLLs with the shared rules; for the DLLs with and without their relocations
+- [ ] MSVC 7.1 builds (Polish Crazy School, Dutch Sacked, the VC 7.1 runtime): CRT shapes the MSVC 6 rules do not
+      know yet (security cookie, `__SEH_prolog`, SSE2 paths in the CRT's math)
 - [ ] C++ EH: in `Gefeuert.exe` the `FuncInfo` stubs end in `jmp [__imp___CxxFrameHandler]` (import) instead of
       a jump to a statically linked handler: extend the shared rule so catch and unwind funclets are found
       either way
@@ -160,7 +173,7 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 ### M3 – Lift and build
 
 - [ ] Every function lifts; traps only in unreachable code, each one explained
-- [ ] `games/gefeuert/` and `games/crazyschool/` shells link every build lifted for the game
+- [ ] `games/sacked/` and `games/crazyschool/` shells link every build lifted for the game
 - [ ] Warning-free with gcc and clang locally, MSVC in CI; build time measured (expected: a few tens of MB of C,
       well under a minute)
 
@@ -171,10 +184,10 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 - [ ] `CreateThread`/`ExitThread`: what the thread does **(open)**
 - [ ] The window is created and a DirectDraw 7 display mode set
 
-### M4b – C runtime and Gefeuert boots
+### M4b – C runtime and Sacked boots
 
-- [ ] `hle/msvcrt` (new, general, offered back to the sister projects): every import of the nine binaries
-      (≈ 120 functions in all), grouped as start-up (`__getmainargs`, `_initterm`, `_acmdln`, `__p__fmode`,
+- [ ] `hle/msvcrt` (new, general, offered back to the sister projects): every import of the binaries that link
+      it (≈ 120 functions in all), grouped as start-up (`__getmainargs`, `_initterm`, `_acmdln`, `__p__fmode`,
       `__p__commode`, `__set_app_type`, `_controlfp`, `_adjust_fdiv`, `_onexit`, `__dllonexit`, `exit`, …), heap
       (`malloc`…`realloc`, `operator new` with `_set_new_handler`/`_set_new_mode`), stdio on guest `FILE`s in
       MSVC's layout (`_iob` and `__pioinfo` are **data** exports STLport reads directly), strings and ctype,
@@ -189,7 +202,7 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 - [ ] `hle/msvcp60`: `std::bad_alloc` constructor, copy constructor and destructor
 - [ ] Unit tests for the C++ EH paths (throw/catch by type, by base class, `catch (...)`, rethrow, unwinding of
       locals) with small lifted fixtures
-- [ ] Gefeuert reaches its window and sets a display mode
+- [ ] Sacked reaches its window and sets a display mode
 
 ### M5 – Picture and input
 
@@ -209,20 +222,21 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 
 ### M7 – In game
 
-- [ ] Every level of Gefeuert (`Level_00`–`Level_19`) and of Crazy School (`Level_00`–`Level_20`), both modes
+- [ ] Every level of Sacked (`Level_00`–`Level_19`) and of Crazy School (`Level_00`–`Level_20`), both modes
       ("Zeit", "Punkte"), the mini games
+- [ ] Every other language: the game starts, its texts show (Cyrillic and Central European code pages in GDI text
+      and in the games' own fonts) and a level is played
 - [ ] High scores, unlocked levels and settings saved and read back
 - [ ] Scripted scenarios per game (`games/<game>/scenarios`) and a one-hour soak each without trap
 
 ### M8 – Converter and platforms
 
-- [ ] `recomp convert --system linux|windows|web --download gefeuert|crazyschool`: fetch the image from
-      archive.org (`https://archive.org/download/cdgefrtdlt/sd-gefeg.bin`,
-      `https://archive.org/download/crazyschoolgame/CrazySchool.iso`), stream it to disk with progress, check
-      size and SHA-256, then convert; without `--download`, a local image is taken as before
-- [ ] Browser page: one entry per game, a **"Download from archive.org"** button that fetches the image with
-      `fetch()` (CORS) and streams it into the worker, and the file picker as a fallback; the page states that
-      the games are offered there as abandonware
+- [ ] `recomp convert --system linux|windows|web --download sacked|crazyschool --language de|en|hu|pl|nl|ru`:
+      fetch the medium from its manifest URL, stream it to disk with progress, check size and SHA-256, then
+      convert; without `--download`, a local medium is taken as before
+- [ ] Browser page: per game a row of **flags** for its languages; choosing one downloads that language's medium
+      from archive.org with `fetch()` (CORS) into the worker, checks it and converts it; the file picker stays as
+      a fallback; the page states that the games are offered there as abandonware
 - [ ] Packages: Windows (zip), Linux (AppImage), browser build; no Android
 - [ ] All three start and reach a level
 
@@ -242,35 +256,41 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 
 | Risk | Impact | Plan |
 |------|--------|------|
-| `MSVCRT.dll` and C++ exceptions in HLE (new to the toolchain) | Gefeuert does not start or crashes on the first `throw` | Crazy School leads M4–M5 meanwhile; EH unit tests before the game; the shared SEH dispatch and unwinding already exist |
+| `MSVCRT.dll` and C++ exceptions in HLE (new to the toolchain) | Sacked does not start or crashes on the first `throw` | Crazy School leads M4–M5 meanwhile; EH unit tests before the game; the shared SEH dispatch and unwinding already exist |
 | STLport reads `_iob` and `__pioinfo` directly | wrong `FILE` layout breaks its streams | keep MSVC 6's structures in guest memory; tests with STLport's stream functions |
 | Old NSIS build without a reference extractor | wrong file names or layout | the header's own entries are the reference; binaries pinned by hash; compare with a Windows install if needed |
 | archive.org CORS for the browser download | the page cannot fetch the images | a quick check with `curl` showed no `Access-Control-Allow-Origin` on the download (redirect and mirror): **confirm in a real browser in M1**; the file picker stays as fallback |
 | archive.org items change or vanish | download fails | pinned SHA-256 refuses changed files; local images keep working |
-| Two builds of each Vorbis DLL | double the lift and test work | they are tiny; shared discovery hints where they agree |
+| Eight game builds, three builds of each Vorbis DLL | more lift and test work | they are small; the engine is the same, so fixes and hints carry over; German first, the others must start and play a level |
+| MSVC 7.1 builds (pl Crazy School, nl Sacked, VC 7.1 runtime) | discovery rules and CPU features (SSE2 in the CRT) not seen in the sister projects | measure in M2; the CRT's SSE2 paths are chosen by `cpuid`, which reports none |
+| Non-Latin text (Russian, Polish, Hungarian) | wrong glyphs in GDI text | GDI's code page handling through SDL3_ttf; test each language in M7 |
 | Engine runs on real time (timing, sound thread) | races in the cooperative thread layer | identify each thread in M4; virtual clock for scripted runs |
 
 ## Research questions
 
 Tracked with answers in [RESEARCH.md](RESEARCH.md):
 
-1. Which NSIS version is Limbic's installer built from, and what is its opcode numbering?
+1. ~~Which NSIS version is Limbic's installer built from, and what is its opcode numbering?~~ (answered,
+   RESEARCH)
 2. Which display modes do the games set (8-bit with `.PAL` palettes, 16-bit)? What does "DirectX 8.1 3D card"
    in Crazy School's requirements refer to, when only DirectDraw 7 is used?
-3. What do the threads do (`_beginthreadex` in Gefeuert, `CreateThread` in Crazy School)?
+3. What do the threads do (`_beginthreadex` in Sacked, `CreateThread` in Crazy School)?
 4. Which registry values must exist before the first start (installer keys vs. the game's own defaults)?
 5. Do the games throw C++ exceptions in normal play, or only on errors?
 6. Where is progress saved (`HIGHSCORE.DAT`, registry)?
 7. Do the browser's requests to archive.org get CORS headers?
+8. Do the localised builds differ in code (beyond their texts), and how much of the engine fixes carry over?
 
 ## Decision log
 
 | Date       | Decision |
 |------------|----------|
-| 2026-11-22 | GefeuertRecomp follows TropicoRecomp, CulturesRecomp and HoMM4Recomp: MIT license, generated code and runtime in C11, the toolchain in Rust, SDL3 as the only platform dependency. Platforms: Windows, Linux, browser; macOS built in CI, not offered; **no Android**. |
+| 2026-11-22 | The project follows TropicoRecomp, CulturesRecomp and HoMM4Recomp: MIT license, generated code and runtime in C11, the toolchain in Rust, SDL3 as the only platform dependency. Platforms: Windows, Linux, browser; macOS built in CI, not offered; **no Android**. |
 | 2026-11-22 | HoMM4Recomp is the template for the shared code (at the commit pinned in M0). Code is kept general, so fixes can go back to the three sister projects. |
-| 2026-11-22 | One repository for both games: the same engine (Limbic), the same middleware; game ids `gefeuert` and `crazyschool`, programs `gefeuert-gefeuert` and `gefeuert-crazyschool`. |
-| 2026-11-22 | First targets: the German CD images as archived on archive.org (`cdgefrtdlt`, `crazyschoolgame`), pinned by hash. The converter downloads them itself (abandonware); local copies of the same images are accepted. |
+| 2026-11-22 | One repository for both games: the same engine (Limbic), the same middleware. Repository and project renamed from GefeuertRecomp to **SackedRecomp**; game ids `sacked` and `crazyschool`, programs `sacked-sacked` and `sacked-crazyschool`. |
+| 2026-11-22 | Targets: every language of both games archived on archive.org (Sacked: de, en, hu, pl, nl, ru; Crazy School: de, ru, pl), pinned by hash with their exact download URLs. The converter downloads the chosen language itself (abandonware); local copies of the same files are accepted. Where an item offers several forms, the smallest complete one is pinned (the Dutch CD's zip, not its 788 MB image; the Russian CloneCD images, not the RAR archives). |
+| 2026-11-22 | The Dutch build's own `msvcr71.dll`/`msvcp71.dll` are lifted (shipped, only kernel32 below them), not replaced: less HLE, the original behaviour. |
 | 2026-11-22 | No resolution or widescreen patches: the games run at their own resolution. |
 | 2026-11-22 | `MSVCRT.dll` and `MSVCP60.dll` are HLE (system DLLs, not shipped); `stlport_vc645.dll` and the Vorbis DLLs are lifted. |
-| 2026-11-22 | Crazy School leads from M4 (static CRT), Gefeuert follows once `hle/msvcrt` and the C++ EH work. |
+| 2026-11-22 | Crazy School leads from M4 (static CRT), Sacked follows once `hle/msvcrt` and the C++ EH work. |
+| 2026-11-22 | M0: the shared code copied from HoMM4Recomp at `df5671d`; Android parts and Heroes IV's game directory not taken over; the shared crates and platform code keep their Android paths unchanged (general code). |
