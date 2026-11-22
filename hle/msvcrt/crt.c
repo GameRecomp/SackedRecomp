@@ -669,6 +669,9 @@ static void k__endthreadex(rc_cpu *c)
 {
     uint32_t a[1] = {RC_ARG(c, 0)};
     rc_crt_call(c, rc_import_address(K32, "ExitThread"), 1, a);
+    if (c->unwind) {
+        return; /* (in a browser: the thread unwinds to its start) */
+    }
     RC_RETURN(c, 0, 0);
 }
 

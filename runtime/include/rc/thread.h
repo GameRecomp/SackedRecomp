@@ -43,7 +43,11 @@ void rc_thread_poll(void);
 void rc_thread_work(void);
 
 /* End the current thread with `code` (ExitThread); on the main thread, the
- * process. Does not return. */
+ * process. Does not return, except in a browser: there the thread's stack
+ * cannot be left behind, so it returns with the thread's CPU unwinding
+ * (c->unwind, to a place no frame claims), the lifted code returns call by
+ * call to the thread's start, and the thread ends there. A caller returns at
+ * once when it sees the unwinding. */
 void rc_thread_exit(uint32_t code);
 
 uint32_t rc_thread_id(void);

@@ -81,6 +81,7 @@ typedef struct thread {
     uint32_t tib;
     uint32_t start, param;
     uint32_t exit_code;
+    bool exiting; /* ExitThread is unwinding the thread's stack (JSPI) */
     uint64_t wake; /* runs again from this time on */
     uint32_t suspended; /* SuspendThread count: runs only at 0 */
 #if BACKEND_FIBERS
@@ -294,11 +295,20 @@ void rc_thread_work(void) { polls = 0; }
  * pthread and JSPI backends, after handing on the baton. */
 static void finish(uint32_t code);
 
+/* Where ExitThread unwinds to in a browser: an address and a frame no lifted function claims. */
+#define EXIT_EIP 0xffffffffu
+#define EXIT_EBP 0xffffffffu
+
 static void thread_main(void)
 {
     thread *t = &threads[current];
     uint32_t arg = t->param;
-    finish(rc_call_guest(t->cpu, t->start, 1, &arg));
+    uint32_t code = rc_call_guest(t->cpu, t->start, 1, &arg);
+    if (t->exiting) {
+        t->cpu->unwind = 0;
+        code = t->exit_code;
+    }
+    finish(code);
 }
 
 void rc_thread_exit(uint32_t code)
@@ -306,12 +316,23 @@ void rc_thread_exit(uint32_t code)
     if (current == 0) {
         rc_exit(code);
     }
+#if BACKEND_JSPI || defined(RC_EXIT_THREAD_UNWINDS)
+    /* The thread's stack is a suspended WebAssembly stack that cannot be dropped: unwind it to
+     * the thread's start (thread_main), as an exception would. (RC_EXIT_THREAD_UNWINDS: the same
+     * on the other backends, to test it there.) */
+    thread *t = &threads[current];
+    t->exit_code = code;
+    t->exiting = true;
+    t->cpu->unwind = 1;
+    t->cpu->unwind_eip = EXIT_EIP;
+    t->cpu->unwind_ebp = EXIT_EBP;
+    t->cpu->eip = EXIT_EIP;
+    return;
+#endif
     finish(code);
 #if BACKEND_PTHREAD
     /* The baton has moved on: this host thread ends here. */
     pthread_exit(NULL);
-#elif BACKEND_JSPI
-    rc_fatal("ExitThread: the thread could not end here");
 #endif
     /* (With fibers and contexts finish() does not return.) */
 }
