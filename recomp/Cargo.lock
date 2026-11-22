@@ -651,6 +651,7 @@ version = "0.0.1"
 dependencies = [
  "crc32fast",
  "flate2",
+ "miniz_oxide 0.9.1",
  "serde_json",
  "sha1",
 ]

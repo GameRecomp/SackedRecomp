@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
 //! Readers for the media the games ship on, without third-party tools:
 //!
-//! - [`inno`]: GOG installers (Inno Setup 5.5.0 unicode, data embedded in the exe)
-//! - [`iso`]: ISO 9660 CD images (primary volume or Joliet)
+//! - [`inno`]: GOG installers (Inno Setup 5.5.0 and 5.6.2 unicode, data in the exe or in slices)
+//! - [`inno3`]: old Inno Setup installers (3.0.6.1, ANSI), as on a CD
+//! - [`nsis`]: Nullsoft installers of the 1.9x era
+//! - [`msi`]: Windows Installer packages with an external cabinet ([`cfb`], [`cab`])
+//! - [`iso`]: ISO 9660 CD images (primary volume or Joliet), cooked or raw ([`rawcd`])
 //! - [`iscab`]: InstallShield 5 cabinets (`DATA1.HDR` + `DATA1.CAB`), as on the Gold CD
 //! - [`zip`]: zip archives of installed copies (stored or deflated)
 //! - [`lzma`]: the streaming LZMA1/LZMA2 decoder the Inno reader uses
@@ -11,11 +14,18 @@
 //! extracts them below a destination directory. Paths are sanitised; nothing is ever
 //! written outside the destination.
 
+pub mod cab;
+pub mod cfb;
 pub mod codepage;
 pub mod inno;
+pub mod inno3;
 pub mod iscab;
 pub mod iso;
 pub mod lzma;
+pub mod md5;
+pub mod msi;
+pub mod nsis;
+pub mod rawcd;
 pub mod zip;
 
 use std::fmt;
@@ -306,6 +316,50 @@ impl Sink for DirSink<'_> {
     }
 }
 
+/// One reader shared by several [`SharedReader`]s, each with its own position (several files of a
+/// CD image open at once: an InstallShield cabinet's volumes).
+#[derive(Clone)]
+pub struct SharedReader {
+    inner: std::rc::Rc<std::cell::RefCell<Box<dyn ReadSeek>>>,
+    pos: u64,
+}
+
+impl SharedReader {
+    pub fn new(r: Box<dyn ReadSeek>) -> Self {
+        SharedReader {
+            inner: std::rc::Rc::new(std::cell::RefCell::new(r)),
+            pos: 0,
+        }
+    }
+}
+
+impl Read for SharedReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let mut r = self.inner.borrow_mut();
+        r.seek(SeekFrom::Start(self.pos))?;
+        let n = r.read(buf)?;
+        self.pos += n as u64;
+        Ok(n)
+    }
+}
+
+impl Seek for SharedReader {
+    fn seek(&mut self, to: SeekFrom) -> io::Result<u64> {
+        let target = match to {
+            SeekFrom::Start(n) => Some(n),
+            SeekFrom::Current(d) => self.pos.checked_add_signed(d),
+            SeekFrom::End(d) => {
+                let len = self.inner.borrow_mut().seek(SeekFrom::End(0))?;
+                len.checked_add_signed(d)
+            }
+        };
+        self.pos = target.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "seek before the start")
+        })?;
+        Ok(self.pos)
+    }
+}
+
 /// Anything the readers can read randomly from.
 pub trait ReadSeek: Read + Seek {}
 impl<T: Read + Seek> ReadSeek for T {}
@@ -371,60 +425,62 @@ mod tests {
 /// What [`open`] found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaType {
-    /// Inno Setup installer (GOG).
+    /// Inno Setup installer (GOG, or an old one from a CD).
     Inno,
-    /// CD image with an InstallShield 5 setup; entries are the installed files.
+    /// Nullsoft installer.
+    Nsis,
+    /// CD image with an InstallShield 5 or 6 setup; entries are the installed files.
     IsoInstallShield,
+    /// CD image with an installer program in its root (Inno Setup or NSIS); entries are the
+    /// installed files.
+    IsoInstaller,
     /// CD image without a recognised setup; entries are the files on the disc.
     Iso,
     /// Zip archive of an installed copy.
     Zip,
+    /// Zip archive of a CD with an installer program in its root; entries are the installed
+    /// files.
+    ZipInstaller,
 }
 
 impl fmt::Display for MediaType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             MediaType::Inno => "Inno Setup installer",
-            MediaType::IsoInstallShield => "CD image (InstallShield 5 setup)",
+            MediaType::Nsis => "NSIS installer",
+            MediaType::IsoInstallShield => "CD image (InstallShield setup)",
+            MediaType::IsoInstaller => "CD image (setup program)",
             MediaType::Iso => "CD image",
             MediaType::Zip => "zip archive",
+            MediaType::ZipInstaller => "zip archive (setup program)",
         })
     }
 }
 
-/// Open a medium by content: zip (`PK\x03\x04`), ISO 9660 (`CD001` at sector 16) or an
-/// Inno Setup exe (`MZ`). For a CD with `DATA1.HDR`/`DATA1.CAB` in its root, the
-/// InstallShield cabinet is opened, so the entries are the installed files.
+/// Open a medium by content: zip (`PK\x03\x04`), ISO 9660 (`CD001` at sector 16, cooked or as a
+/// raw 2352-byte-sector `.bin`), or an installer exe (`MZ`: Inno Setup or NSIS). For a CD with
+/// `DATA1.HDR`/`DATA1.CAB` in its root, the InstallShield cabinet is opened; for a CD with an
+/// installer program in its root, that installer: either way the entries are the installed files.
+/// External Inno slices beside an installer exe are opened by name.
 pub fn open(path: &Path) -> Result<(MediaType, Box<dyn Archive>)> {
     let mut f = fs::File::open(path)?;
     let mut magic = [0u8; 4];
     let got = f.read(&mut magic)?;
-    let mut iso_magic = [0u8; 5];
-    let is_iso = f.seek(SeekFrom::Start(16 * 2048 + 1)).is_ok()
-        && f.read(&mut iso_magic).unwrap_or(0) == 5
-        && &iso_magic == b"CD001";
     drop(f);
-    if got >= 4 && magic == *b"PK\x03\x04" {
-        return Ok((MediaType::Zip, Box::new(zip::Zip::open(path)?)));
-    }
-    if is_iso {
-        let mut img = iso::Iso::open(path)?;
-        if let (Some(h), Some(c)) = (img.find("DATA1.HDR"), img.find("DATA1.CAB")) {
-            let hdr = img.read_entry(h)?;
-            let cab = img.into_entry_reader(c);
-            let cabinet = iscab::Cabinet::open(&hdr, Box::new(cab))?;
-            return Ok((MediaType::IsoInstallShield, Box::new(cabinet)));
-        }
-        return Ok((MediaType::Iso, Box::new(img)));
-    }
     if got >= 2 && magic[..2] == *b"MZ" {
+        let mut r: Box<dyn ReadSeek> = Box::new(io::BufReader::new(fs::File::open(path)?));
+        if nsis::find_first_header(&mut r).is_some() {
+            return Ok((MediaType::Nsis, Box::new(nsis::Installer::from_reader(r)?)));
+        }
+        if inno3::is_old_inno(&mut r) {
+            return Ok((MediaType::Inno, Box::new(inno3::Installer::from_reader(r)?)));
+        }
         return Ok((MediaType::Inno, Box::new(inno::Installer::open(path)?)));
     }
-    format_err(format!("{}: unknown media type", path.display()))
+    open_readers(Box::new(io::BufReader::new(fs::File::open(path)?)), Vec::new())
 }
 
-/// Open a medium from any reader (in a browser: the chosen file in pieces): a zip of an installed
-/// copy or an Inno Setup installer. CD images need [`open`].
+/// Open a medium from any reader (in a browser: the chosen file in pieces): see [`open`].
 pub fn open_reader(r: Box<dyn ReadSeek>) -> Result<(MediaType, Box<dyn Archive>)> {
     open_readers(r, Vec::new())
 }
@@ -440,13 +496,116 @@ pub fn open_readers(
     let got = r.read(&mut magic)?;
     r.seek(SeekFrom::Start(0))?;
     if got >= 4 && magic == *b"PK\x03\x04" && slices.is_empty() {
-        return Ok((MediaType::Zip, Box::new(zip::Zip::from_reader(r)?)));
+        let mut z = zip::Zip::from_reader(r)?;
+        // A zip of a CD whose installer program is in its root: the installer, read into memory.
+        let mut exes: Vec<(u64, usize)> = z
+            .entries()
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| {
+                !e.path.contains('/')
+                    && e.path.to_ascii_lowercase().ends_with(".exe")
+                    && e.size < 1 << 30
+            })
+            .map(|(i, e)| (e.size, i))
+            .collect();
+        exes.sort_by(|a, b| b.cmp(a));
+        for (_, i) in exes {
+            let data = z.read_entry(i)?;
+            let mut c = io::Cursor::new(data);
+            if nsis::find_first_header(&mut c).is_some() || inno3::is_old_inno(&mut c) {
+                let (_, archive) = open_installer(Box::new(c), Vec::new())?;
+                return Ok((MediaType::ZipInstaller, archive));
+            }
+        }
+        return Ok((MediaType::Zip, Box::new(z)));
     }
     if got >= 2 && magic[..2] == *b"MZ" {
-        return Ok((
-            MediaType::Inno,
-            Box::new(inno::Installer::from_readers(r, slices)?),
-        ));
+        return open_installer(r, slices);
     }
-    format_err("neither a GOG installer nor a zip")
+    if slices.is_empty() {
+        if let Some(offset) = rawcd::detect(&mut r) {
+            return open_cd(Box::new(rawcd::RawCd::new(r, offset)?));
+        }
+        let mut iso_magic = [0u8; 5];
+        let is_iso = r.seek(SeekFrom::Start(16 * 2048 + 1)).is_ok()
+            && r.read(&mut iso_magic).unwrap_or(0) == 5
+            && &iso_magic == b"CD001";
+        if is_iso {
+            return open_cd(r);
+        }
+    }
+    format_err("not a GOG installer, CD image, installer or zip")
+}
+
+/// An installer exe: NSIS, old Inno Setup (3.x) or a GOG Inno Setup installer with its slices.
+fn open_installer(
+    mut r: Box<dyn ReadSeek>,
+    slices: Vec<Box<dyn ReadSeek>>,
+) -> Result<(MediaType, Box<dyn Archive>)> {
+    if slices.is_empty() {
+        if nsis::find_first_header(&mut r).is_some() {
+            return Ok((MediaType::Nsis, Box::new(nsis::Installer::from_reader(r)?)));
+        }
+        if inno3::is_old_inno(&mut r) {
+            return Ok((MediaType::Inno, Box::new(inno3::Installer::from_reader(r)?)));
+        }
+    }
+    Ok((
+        MediaType::Inno,
+        Box::new(inno::Installer::from_readers(r, slices)?),
+    ))
+}
+
+/// A CD image: its InstallShield setup, its installer program, or the files on it.
+fn open_cd(r: Box<dyn ReadSeek>) -> Result<(MediaType, Box<dyn Archive>)> {
+    let mut img = iso::Iso::from_reader(r)?;
+    if let (Some(h), Some(_)) = (img.find("DATA1.HDR"), img.find("DATA1.CAB")) {
+        let hdr = img.read_entry(h)?;
+        // DATA1.CAB, DATA2.CAB, … as far as they go.
+        let mut volumes = Vec::new();
+        while let Some(v) = img.find(&format!("DATA{}.CAB", volumes.len() + 1)) {
+            volumes.push(v);
+        }
+        let readers = img
+            .into_entry_readers(&volumes)
+            .into_iter()
+            .map(|r| Some(Box::new(r) as Box<dyn ReadSeek>))
+            .collect();
+        let cabinet = iscab::Cabinet::open_volumes(&hdr, readers)?;
+        return Ok((MediaType::IsoInstallShield, Box::new(cabinet)));
+    }
+    // A Windows Installer package with its cabinet beside it.
+    let root = |ext: &str| -> Vec<usize> {
+        img.entries()
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| !e.path.contains('/') && e.path.to_ascii_lowercase().ends_with(ext))
+            .map(|(i, _)| i)
+            .collect()
+    };
+    if let ([m], [c]) = (&root(".msi")[..], &root(".cab")[..]) {
+        let (m, c) = (*m, *c);
+        let msi = img.read_entry(m)?;
+        let cab = img.into_entry_reader(c);
+        return Ok((MediaType::IsoInstaller, Box::new(msi::Package::open(&msi, Box::new(cab))?)));
+    }
+    // An installer program in the root (a launcher such as Autostart.exe is no installer).
+    let mut exes: Vec<(String, usize)> = img
+        .entries()
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| !e.path.contains('/') && e.path.to_ascii_lowercase().ends_with(".exe"))
+        .map(|(i, e)| (e.path.clone(), i))
+        .collect();
+    exes.sort();
+    for (_, i) in exes {
+        let mut sub = img.open_entry(i);
+        let installer = nsis::find_first_header(&mut sub).is_some() || inno3::is_old_inno(&mut sub);
+        if installer {
+            let (_, archive) = open_installer(Box::new(img.into_entry_reader(i)), Vec::new())?;
+            return Ok((MediaType::IsoInstaller, archive));
+        }
+    }
+    Ok((MediaType::Iso, Box::new(img)))
 }

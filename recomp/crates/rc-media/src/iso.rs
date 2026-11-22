@@ -158,6 +158,20 @@ impl Iso {
     }
 }
 
+impl Iso {
+    /// Consume the image and give one reader per file of `indices`, all sharing the image.
+    pub fn into_entry_readers(self, indices: &[usize]) -> Vec<SubReader<crate::SharedReader>> {
+        let shared = crate::SharedReader::new(self.r);
+        indices
+            .iter()
+            .map(|&i| {
+                let (off, len) = self.extents[i];
+                SubReader::new(shared.clone(), off, len)
+            })
+            .collect()
+    }
+}
+
 impl Archive for Iso {
     fn entries(&self) -> &[Entry] {
         &self.entries

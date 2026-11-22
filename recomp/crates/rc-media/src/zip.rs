@@ -144,6 +144,13 @@ impl<R: Read + Seek> Zip<R> {
         })
     }
 
+    /// Read a whole file (`k` indexes `entries`).
+    pub fn read_entry(&mut self, k: usize) -> Result<Vec<u8>> {
+        let mut out = Vec::with_capacity(self.entries[k].size as usize);
+        self.write_file(k, &mut out)?;
+        Ok(out)
+    }
+
     fn write_file(&mut self, k: usize, out: &mut dyn Write) -> Result<()> {
         let f = &self.files[k];
         let path = &self.entries[k].path;
