@@ -129,9 +129,11 @@ let running = false;
 let slice = null;
 function setFiles(list) {
   const all = [...(list || [])];
-  file = all.find((f) => !/\.bin$/i.test(f.name)) || null;
-  slice = all.find((f) => /\.bin$/i.test(f.name)) || null;
   const needSlice = !!(game && game.slice);
+  // Only an installer that has one keeps its data in a -1.bin beside it; a .bin otherwise is
+  // the medium itself (a raw CD image, as the German Sacked's sd-gefeg.bin).
+  slice = (needSlice && all.find((f) => /-\d+\.bin$/i.test(f.name))) || null;
+  file = all.find((f) => f !== slice) || null;
   const names = [file, slice].filter(Boolean).map((f) => `${f.name} (${mib(f.size)})`);
   let note = names.length ? names.join(' + ') : 'No file chosen';
   if (file && needSlice && !slice) note += ' — choose its .bin file too (both at once)';
@@ -180,9 +182,13 @@ async function fetchRelease(lang) {
     const sum = hex(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
     if (sum !== lang.sha256) throw new Error('the download is not the archived file (its SHA-256 differs)');
     if (forGame !== game) return;
-    note.textContent = `${lang.title}: downloaded and checked (${mib(lang.size)}).`;
     setFiles([new File([blob], lang.file)]);
-    start();
+    // Converting for the browser starts at once. A zip asks where to save it, which a browser
+    // allows only right after a click (not minutes later, at the end of a download).
+    const web = document.querySelector('input[name=system]:checked')?.value === 'web';
+    note.textContent = `${lang.title}: downloaded and checked (${mib(lang.size)}).`
+      + (web ? '' : ' Press Convert to make the zip.');
+    if (web) start();
   } catch (err) {
     if (err && err.name === 'AbortError') return;
     note.textContent = '';
