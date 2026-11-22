@@ -234,7 +234,11 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
       has; Windows, Linux and the browser offered, no Android
 - [x] `recomp convert --system linux` from the German Sacked: the native (Cranelift) build reaches the menu
 - [x] The release's name travels with its files (`recomp-variant.txt`), for the language and code page
-- [ ] The browser build (Emscripten web shells: not built here yet), Windows packages, CI
+- [x] The browser: the web shells build (Emscripten 7.0.0); in Firefox the page converts the German Sacked in
+      9 seconds (6802 functions as WebAssembly, the files into the browser's storage) and the player runs it to
+      the main menu
+- [x] Windows: `tools/check-windows` (MinGW, the runtime tests under Wine) passes
+- [ ] Windows packages and the CI workflows on GitHub (nothing pushed yet)
 - [ ] All three start and reach a level
 
 ### M9 – Release v0.1
