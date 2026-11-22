@@ -270,6 +270,10 @@ static void find_info(void *ctx, const char *name, bool is_dir, uint64_t size)
     }
 }
 
+static const char *game_variant;
+
+const char *rc_game_variant(void) { return game_variant; }
+
 static const char *install_language(const char *game_dir, const char *variant)
 {
     static const struct {
@@ -531,7 +535,7 @@ int rc_game_main(const rc_game_info *game, const rc_generated_set *generated, in
         if (strcmp(h, exe_hash) == 0) {
             const char *lang = install_language(game_dir, b->variant);
             game_language = lang;
-        rc_set_game_codepage(rc_codepage_of_language(lang));
+            game_variant = b->variant;
             rc_set_game_codepage(rc_codepage_of_language(lang));
             snprintf(title_suffix, sizeof title_suffix, lang ? " %s (%s, %s)" : " %s (%s)", RC_VERSION, RC_GIT_HASH,
                      lang ? lang : "");

@@ -46,11 +46,6 @@ typedef struct rc_event {
     int extended;
     int repeat;
     rc_event_source source; /* of a pointer event */
-    /* A mouse move from the host's mouse: how far it moved, in the host's
-     * pixels (not scaled to the frame; raw, as DirectInput's mickeys), with
-     * has_motion set. Scripted moves have only their position. */
-    int dx, dy;
-    bool has_motion;
 } rc_event;
 
 /* Start the platform. False if there is no display (the null platform
@@ -138,12 +133,6 @@ bool rc_plat_poll(rc_event *e);
 void rc_plat_present(const uint32_t *pixels, int width, int height, int pitch);
 
 void rc_plat_cursor_visible(bool visible);
-
-/* Catch the mouse (on) or let it go: the host's pointer is hidden and kept in
- * the window, and moves keep coming at its edge (has_motion), as a program
- * that reads the mouse's own motion (DirectInput) gets it on Windows. The
- * window lets it go while it does not have the focus (Alt+Tab). */
-void rc_plat_mouse_capture(bool on);
 
 /* Text is being typed into a field at x, y, width x height (frame pixels),
  * or no longer (on false): the host may show its on-screen keyboard (on

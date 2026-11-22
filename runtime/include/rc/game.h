@@ -57,6 +57,11 @@ int rc_game_main(const rc_game_info *game, const rc_generated_set *generated, in
  * if unknown. For a game project's patch that writes text into the game. */
 const char *rc_game_language(void);
 
+/* The build of the executable being run: the first variant of its [[binary]] in game.toml, e.g.
+ * "cd-de"; NULL if it is not lifted. For a game project's patches, whose addresses differ from
+ * build to build. */
+const char *rc_game_variant(void);
+
 #ifdef __cplusplus
 }
 #endif

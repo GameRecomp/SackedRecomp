@@ -67,7 +67,6 @@ void rc_plat_present(const uint32_t *pixels, int width, int height, int pitch)
 }
 
 void rc_plat_cursor_visible(bool visible) { (void)visible; }
-void rc_plat_mouse_capture(bool on) { (void)on; }
 
 void rc_plat_text_input(bool on, int x, int y, int width, int height)
 {
