@@ -1,0 +1,28 @@
+# Original game files: supplied by each user, never committed.
+/orig/
+# Lifted C produced by the recompiler. Derived from copyrighted code: never commit.
+/generated/
+# Build output
+/build/
+/out/
+/recomp/target/
+target/
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+compile_commands.json
+.cache/
+# Game files that must never end up in the tree, wherever they are copied to
+*.iso
+*.bin
+*.cue
+*.ogd
+*.OGD
+*.o2f
+*.O2F
+*.col
+*.ogg
+*.wav
+*.WAV
