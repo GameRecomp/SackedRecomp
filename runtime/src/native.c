@@ -1,0 +1,556 @@
+/* SPDX-License-Identifier: MIT */
+/*
+ * Loading native lifted code (rc/native.h) and the runtime functions it
+ * calls through rc_cpu.helpers. The blob format is described in
+ * recomp/crates/rc-emit-native/src/blob.rs; the x87 operation codes in
+ * recomp/crates/rc-emit-native/src/fpu.rs.
+ *
+ * Under Emscripten the lifted code is a WebAssembly module from
+ * rc-emit-wasm instead, which the page instantiates against this program's
+ * memory and function table (rc/native.h, rc_wasm_*). Its `rc.code` section
+ * holds the same tables as a blob, without code: a function's offset is its
+ * index, and its function pointer the table slot `table_base + index`.
+ */
+#if defined(__APPLE__)
+#define _DARWIN_C_SOURCE
+#elif !defined(_WIN32)
+#define _DEFAULT_SOURCE
+#endif
+
+#include "rc/mmx.h"
+#include "rc/native.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "rc/dispatch.h"
+#include "rc/lifted.h"
+#include "rc/log.h"
+#include "rc/mem.h"
+#include "rc/x87.h"
+
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif !defined(__EMSCRIPTEN__)
+#include <sys/mman.h>
+#if defined(__APPLE__)
+#include <libkern/OSCacheControl.h>
+#include <pthread.h>
+#endif
+#endif
+
+/* ---- the helpers native code calls ---- */
+
+static void h_dispatch(rc_cpu *c, uint32_t target) { rc_dispatch(c, target); }
+
+/* Trap messages of the IR, by (instruction address, number). */
+typedef struct trap_msg {
+    uint32_t addr, n;
+    const char *text;
+} trap_msg;
+static trap_msg *traps;
+static uint32_t ntraps, traps_cap;
+
+static void h_trap(rc_cpu *c, uint32_t addr, uint32_t kind, uint32_t arg)
+{
+    static char why[256];
+    switch (kind) {
+    case 0: {
+        const char *t = "a trap";
+        for (uint32_t i = 0; i < ntraps; i++) {
+            if (traps[i].addr == addr && traps[i].n == arg) {
+                t = traps[i].text;
+                break;
+            }
+        }
+        snprintf(why, sizeof why, "%s", t);
+        break;
+    }
+    case 1:
+        snprintf(why, sizeof why, "transfer to %#010x, not a known entry", arg);
+        break;
+    case 2:
+        snprintf(why, sizeof why, "call to %#010x, not a known entry", arg);
+        break;
+    default:
+        snprintf(why, sizeof why, "jump table target outside the table");
+        break;
+    }
+    rc_trap(c, addr, why);
+}
+
+static void h_cpuid(rc_cpu *c)
+{
+    rc_cpuid(&c->r[RC_EAX], &c->r[RC_EBX], &c->r[RC_ECX], &c->r[RC_EDX]);
+}
+
+static void h_rdtsc(rc_cpu *c) { rc_rdtsc(&c->r[RC_EAX], &c->r[RC_EDX]); }
+
+static uint32_t h_fstsw(rc_cpu *c) { return rc_fstsw(c); }
+
+static void h_point(rc_cpu *c, uint32_t addr) { rc_point(c, addr); }
+
+/* An x87 operand's value, as the C back end reads it. */
+static double fsrc(rc_cpu *c, uint32_t code, uint32_t a)
+{
+    uint8_t *const m = rc_mem_base;
+    switch ((code >> 8) & 15) {
+    case 0:
+        return RC_ST(c, (code >> 12) & 7);
+    case 1:
+        return rc_f32(rc_ld32m(m, a));
+    case 2:
+        return rc_f64(rc_ld64m(m, a));
+    case 3:
+        return rc_f80(m, a);
+    case 4:
+        return (double)(int16_t)rc_ld16m(m, a);
+    case 5:
+        return (double)(int32_t)rc_ld32m(m, a);
+    default:
+        return (double)(int64_t)rc_ld64m(m, a);
+    }
+}
+
+/* One x87 operation: what the C back end writes for it (rc-emit-c's
+ * `fpu`), decoded from the code native code passes. */
+static void h_fpu(rc_cpu *c, uint32_t code, uint32_t a)
+{
+    uint8_t *const m = rc_mem_base;
+    unsigned sub = (code >> 16) & 15, dst = (code >> 20) & 7, pop = (code >> 24) & 3;
+    unsigned st = (code >> 12) & 7;
+    switch (code & 0xff) {
+    case 0: /* load */
+        rc_fpush(c, fsrc(c, code, a));
+        break;
+    case 1:
+        rc_fconst(c, (int)sub);
+        break;
+    case 2: /* store */
+        switch ((code >> 8) & 15) {
+        case 0:
+            RC_ST(c, st) = RC_ST(c, 0);
+            break;
+        case 1:
+            rc_st32m(m, a, rc_f32bits(RC_ST(c, 0)));
+            break;
+        case 2:
+            rc_st64m(m, a, rc_f64bits(RC_ST(c, 0)));
+            break;
+        case 3:
+            rc_st_f80(m, a, RC_ST(c, 0));
+            break;
+        case 4:
+            rc_st16m(m, a, (uint16_t)rc_fist(c, 16));
+            break;
+        case 5:
+            rc_st32m(m, a, (uint32_t)rc_fist(c, 32));
+            break;
+        default:
+            rc_st64m(m, a, rc_fist(c, 64));
+            break;
+        }
+        if (pop) {
+            rc_fpop(c);
+        }
+        break;
+    case 3: /* arithmetic */
+        rc_farith(c, (int)sub, (int)dst, fsrc(c, code, a));
+        if (pop) {
+            rc_fpop(c);
+        }
+        break;
+    case 4:
+        rc_funary(c, (int)sub);
+        break;
+    case 5:
+        rc_fbinary(c, (int)sub);
+        break;
+    case 6: /* compare */
+        rc_fcom(c, fsrc(c, code, a));
+        for (unsigned i = 0; i < pop; i++) {
+            rc_fpop(c);
+        }
+        break;
+    case 7:
+        rc_fxch(c, (int)st);
+        break;
+    case 8:
+        rc_ffree(c, (int)st);
+        break;
+    case 9:
+        c->top = (uint8_t)((c->top + 1) & 7);
+        break;
+    case 10:
+        c->top = (uint8_t)((c->top - 1) & 7);
+        break;
+    case 11:
+        rc_finit(c);
+        break;
+    case 12:
+        c->fpu_status &= 0x7f00u;
+        break;
+    case 13:
+        c->fpu_control = (uint16_t)a;
+        break;
+    case 14:
+        rc_fstenv(c, m, a);
+        break;
+    case 15:
+        rc_fldenv(c, m, a);
+        break;
+    case 16:
+        rc_fsave(c, m, a);
+        break;
+    case 17:
+        rc_frstor(c, m, a);
+        break;
+    default:
+        rc_fatal("native code: x87 operation %#x", code);
+    }
+}
+
+/* One MMX operation by its index in rc_ir::MmxOp (rc/mmx.h, RC_MMX_OPS). */
+typedef uint64_t (*mmx_fn)(uint64_t, uint64_t);
+static uint64_t h_mmx(rc_cpu *c, uint32_t op, uint64_t a, uint64_t b)
+{
+#define ENTRY(name) rc_mmx_##name,
+    static const mmx_fn ops[] = {RC_MMX_OPS(ENTRY)};
+#undef ENTRY
+    (void)c;
+    if (op >= sizeof ops / sizeof ops[0]) {
+        rc_fatal("native code: MMX operation %u", op);
+    }
+    return ops[op](a, b);
+}
+
+/* rc-emit-native's and rc-emit-wasm's layout::UNWIND, EH_DEPTH and RESUME_EIP. */
+_Static_assert(sizeof(void *) != 8 || (offsetof(rc_cpu, unwind) == 200 && offsetof(rc_cpu, eh_depth) == 212 &&
+                                       offsetof(rc_cpu, resume_eip) == 220),
+               "rc_cpu's exception fields moved: change rc-emit-native's layout");
+_Static_assert(sizeof(void *) != 4 || (offsetof(rc_cpu, unwind) == 192 && offsetof(rc_cpu, eh_depth) == 204 &&
+                                       offsetof(rc_cpu, resume_eip) == 212),
+               "rc_cpu's exception fields moved: change rc-emit-wasm's layout");
+
+static void h_dispatch_jump(rc_cpu *c, uint32_t target) { rc_dispatch_jump(c, target); }
+
+/* rc_unwind_claim for one range: whether this frame took the continuation over. */
+static uint32_t h_unwind_claim(rc_cpu *c, uint32_t ebp, uint32_t lo, uint32_t hi)
+{
+    rc_unwind_claim(c, ebp, lo, hi, 0, 0);
+    return c->unwind == 0;
+}
+
+static void h_unwind_begin(rc_cpu *c, uint32_t eip) { rc_unwind_begin(c, eip); }
+
+/* In the order of rc-emit-native's `helper` module. Function pointers are
+ * stored as data pointers, which every platform this runs on allows. */
+static const void *helper_table[11];
+
+static void init_helpers(void)
+{
+    union {
+        void (*f)(void);
+        const void *p;
+    } u;
+#define SET(i, fn)                                                                                 \
+    u.f = (void (*)(void))(fn);                                                                    \
+    helper_table[i] = u.p
+    SET(0, h_dispatch);
+    SET(1, h_trap);
+    SET(2, h_cpuid);
+    SET(3, h_rdtsc);
+    SET(4, h_fpu);
+    SET(5, h_fstsw);
+    SET(6, h_point);
+    SET(7, h_mmx);
+    SET(8, h_dispatch_jump);
+    SET(9, h_unwind_claim);
+    SET(10, h_unwind_begin);
+#undef SET
+}
+
+void rc_native_bind(rc_cpu *c)
+{
+    if (!helper_table[0]) {
+        init_helpers();
+    }
+    c->mem = rc_mem_base;
+    c->helpers = helper_table;
+}
+
+/* ---- loading ---- */
+
+static bool loaded;
+static rc_native_image current;
+
+#if defined(__EMSCRIPTEN__)
+/* The first function-table slot of the module being registered. */
+static uint32_t wasm_table_base;
+
+EMSCRIPTEN_KEEPALIVE const uint32_t *rc_wasm_helpers(void)
+{
+    /* Function pointers are table slots: the module imports these. */
+    static uint32_t slots[11];
+    slots[0] = (uint32_t)(uintptr_t)h_dispatch;
+    slots[1] = (uint32_t)(uintptr_t)h_trap;
+    slots[2] = (uint32_t)(uintptr_t)h_cpuid;
+    slots[3] = (uint32_t)(uintptr_t)h_rdtsc;
+    slots[4] = (uint32_t)(uintptr_t)h_fpu;
+    slots[5] = (uint32_t)(uintptr_t)h_fstsw;
+    slots[6] = (uint32_t)(uintptr_t)h_point;
+    slots[7] = (uint32_t)(uintptr_t)h_mmx;
+    slots[8] = (uint32_t)(uintptr_t)h_dispatch_jump;
+    slots[9] = (uint32_t)(uintptr_t)h_unwind_claim;
+    slots[10] = (uint32_t)(uintptr_t)h_unwind_begin;
+    return slots;
+}
+
+bool rc_wasm_open(const uint8_t *tables, size_t size, uint32_t table_base, rc_native_image *img, char *err,
+                  size_t errn)
+{
+    wasm_table_base = table_base;
+    return rc_native_open(tables, size, img, err, errn);
+}
+
+EMSCRIPTEN_KEEPALIVE int rc_wasm_register(const uint8_t *tables, uint32_t size, uint32_t table_base)
+{
+    char err[256];
+    wasm_table_base = table_base;
+    if (!rc_native_load(tables, size, err, sizeof err)) {
+        rc_log("game code: %s", err);
+        return 0;
+    }
+    return 1;
+}
+#endif
+
+/* The blob's target id for this build (rc-emit-native's Target::id). */
+static uint32_t host_target(void)
+{
+#if defined(__EMSCRIPTEN__)
+    return 5;
+#elif defined(__x86_64__) || defined(_M_X64)
+#if defined(_WIN32)
+    return 2;
+#else
+    return 1;
+#endif
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__APPLE__)
+    return 3;
+#else
+    return 4;
+#endif
+#else
+    return 0;
+#endif
+}
+
+const char *rc_native_target(void)
+{
+    switch (host_target()) {
+    case 1:
+        return "x86_64-sysv";
+    case 2:
+        return "x86_64-windows";
+    case 3:
+        return "arm64-apple";
+    case 4:
+        return "arm64-linux";
+    case 5:
+        return "wasm32";
+    default:
+        return NULL;
+    }
+}
+
+static uint32_t rd32(const uint8_t *b) { return (uint32_t)b[0] | (uint32_t)b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24; }
+
+/* Executable memory holding a copy of `src`. */
+static uint8_t *map_code(const uint8_t *src, size_t n)
+{
+#if defined(_WIN32)
+    uint8_t *p = VirtualAlloc(NULL, n, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (!p) {
+        return NULL;
+    }
+    memcpy(p, src, n);
+    DWORD old;
+    if (!VirtualProtect(p, n, PAGE_EXECUTE_READ, &old)) {
+        return NULL;
+    }
+    FlushInstructionCache(GetCurrentProcess(), p, n);
+    return p;
+#elif defined(__EMSCRIPTEN__)
+    (void)src;
+    (void)n;
+    return NULL;
+#elif defined(__APPLE__) && defined(__aarch64__)
+    /* Apple silicon: writable and executable memory comes from MAP_JIT,
+     * switched between writing and running per thread. */
+    uint8_t *p = mmap(NULL, n, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
+    if (p == MAP_FAILED) {
+        return NULL;
+    }
+    pthread_jit_write_protect_np(0);
+    memcpy(p, src, n);
+    pthread_jit_write_protect_np(1);
+    sys_icache_invalidate(p, n);
+    return p;
+#else
+    uint8_t *p = mmap(NULL, n, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (p == MAP_FAILED) {
+        return NULL;
+    }
+    memcpy(p, src, n);
+    if (mprotect(p, n, PROT_READ | PROT_EXEC) != 0) {
+        return NULL;
+    }
+#if defined(__aarch64__)
+    __builtin___clear_cache((char *)p, (char *)p + n);
+#endif
+    return p;
+#endif
+}
+
+#define FAIL(...)                                                                                  \
+    do {                                                                                           \
+        snprintf(err, errn, __VA_ARGS__);                                                          \
+        return false;                                                                              \
+    } while (0)
+
+bool rc_native_open(const uint8_t *b, size_t size, rc_native_image *img, char *err, size_t errn)
+{
+    memset(img, 0, sizeof *img);
+    if (size < 48 || memcmp(b, "RCNATIVE", 8) != 0) {
+        FAIL("not native code from recomp");
+    }
+    /* Format 2: the helpers and CPU state for exception unwinding. */
+    if (rd32(b + 8) != 2) {
+        FAIL("native code of format %u (this runtime reads 2)", rd32(b + 8));
+    }
+    if (rd32(b + 12) != host_target()) {
+        FAIL("native code for another machine (target %u, this is %u)", rd32(b + 12), host_target());
+    }
+    if (rd32(b + 16) != (uint32_t)offsetof(rc_cpu, mem) || rd32(b + 20) != (uint32_t)offsetof(rc_cpu, helpers)) {
+        FAIL("native code for another runtime version (CPU state layout differs)");
+    }
+    uint32_t nfuncs = rd32(b + 24), ntr = rd32(b + 28), nmods = rd32(b + 32);
+    uint32_t code_at = rd32(b + 36), csize = rd32(b + 40);
+    if ((uint64_t)code_at + csize > size || code_at < 48 || nfuncs == 0) {
+        FAIL("native code is damaged (sizes)");
+    }
+#if defined(__EMSCRIPTEN__)
+    /* A module's tables: the code is in the module. */
+    if (csize != 0) {
+        FAIL("native code is damaged (code in a module's tables)");
+    }
+    csize = nfuncs;
+#endif
+    const uint8_t *p = b + 48, *end = b + code_at;
+#define NEED(n)                                                                                    \
+    if ((size_t)(end - p) < (size_t)(n)) {                                                         \
+        FAIL("native code is damaged (tables)");                                                   \
+    }
+
+    rc_fn_entry *table = malloc((size_t)nfuncs * sizeof *table);
+    const char **modules = calloc((size_t)nmods + 1, sizeof *modules);
+    if (ntraps + ntr > traps_cap) {
+        trap_msg *grown = realloc(traps, ((ntraps + ntr) * 2 + 16) * sizeof *traps);
+        if (!grown) {
+            FAIL("out of memory");
+        }
+        traps = grown;
+        traps_cap = (ntraps + ntr) * 2 + 16;
+    }
+    if (!table || !modules) {
+        FAIL("out of memory");
+    }
+#if defined(__EMSCRIPTEN__)
+    uint8_t *code = NULL;
+#else
+    uint8_t *code = map_code(b + code_at, csize);
+    if (!code) {
+        FAIL("cannot map native code executable");
+    }
+#endif
+    for (uint32_t i = 0; i < nfuncs; i++) {
+        NEED(8);
+        uint32_t addr = rd32(p), off = rd32(p + 4);
+        p += 8;
+        if (off >= csize || (i > 0 && addr <= table[i - 1].addr)) {
+            FAIL("native code is damaged (function table)");
+        }
+        table[i].addr = addr;
+#if defined(__EMSCRIPTEN__)
+        table[i].fn = (rc_fn)(uintptr_t)(wasm_table_base + off);
+#else
+        union {
+            const void *p;
+            rc_fn f;
+        } u;
+        u.p = code + off;
+        table[i].fn = u.f;
+#endif
+    }
+    for (uint32_t i = 0; i < ntr; i++) {
+        NEED(12);
+        uint32_t len = rd32(p + 8);
+        NEED(12 + (size_t)len);
+        char *t = malloc((size_t)len + 1);
+        if (!t) {
+            FAIL("out of memory");
+        }
+        memcpy(t, p + 12, len);
+        t[len] = 0;
+        traps[ntraps].addr = rd32(p);
+        traps[ntraps].n = rd32(p + 4);
+        traps[ntraps].text = t;
+        ntraps++;
+        p += 12 + len;
+    }
+    for (uint32_t i = 0; i < nmods; i++) {
+        NEED(4);
+        uint32_t len = rd32(p);
+        NEED(4 + (size_t)len);
+        char *t = malloc((size_t)len + 1);
+        if (!t) {
+            FAIL("out of memory");
+        }
+        memcpy(t, p + 4, len);
+        t[len] = 0;
+        modules[i] = t;
+        p += 4 + len;
+    }
+#undef NEED
+    img->table = table;
+    img->count = nfuncs;
+    img->modules = modules;
+    img->code = code;
+    img->code_size = csize;
+    return true;
+}
+
+bool rc_native_load(const uint8_t *b, size_t size, char *err, size_t errn)
+{
+    if (loaded) {
+        FAIL("native code is already loaded");
+    }
+    if (!rc_native_open(b, size, &current, err, errn)) {
+        return false;
+    }
+    rc_set_lifted(current.table, current.count);
+    loaded = true;
+    return true;
+}
+
+bool rc_native_loaded(void) { return loaded; }
+
+const char *const *rc_native_modules(void) { return loaded ? current.modules : NULL; }

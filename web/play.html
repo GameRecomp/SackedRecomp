@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heroes IV Player</title>
+<meta name="description" content="Plays the copy of Heroes of Might and Magic IV you converted, in this browser.">
+<link rel="icon" href="heroes4.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="player idle">
+<div class="stage"><canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas></div>
+
+<div class="bar" id="bar">
+  <a id="back" href="./">Converter</a>
+  <span class="spacer"></span>
+  <span id="saved" class="saved"></span>
+  <label title="The resolution the game plays at, and how the picture fills the page.">Resolution <select id="resolution">
+    <option value="">Window ×1</option>
+    <option value="window x1.5">Window ×1.5</option>
+    <option value="window x2">Window ×2</option>
+    <option value="window x2.5">Window ×2.5</option>
+    <option value="window x3">Window ×3</option>
+    <option value="off">Game's own</option>
+    <option value="1360x768">1360 × 768 (16:9)</option>
+    <option value="1600x900">1600 × 900 (16:9)</option>
+    <option value="1920x1080">1920 × 1080 (16:9)</option>
+    <option value="2560x1440">2560 × 1440 (16:9)</option>
+    <option value="3840x2160">3840 × 2160 (16:9)</option>
+    <option value="1440x900">1440 × 900 (16:10)</option>
+    <option value="1680x1050">1680 × 1050 (16:10)</option>
+    <option value="1920x1200">1920 × 1200 (16:10)</option>
+    <option value="2560x1600">2560 × 1600 (16:10)</option>
+    <option value="1400x1050">1400 × 1050 (4:3)</option>
+  </select></label>
+  <label>Scale <select id="scale">
+    <option value="0">Fit</option>
+    <option value="1">1×</option>
+    <option value="2">2×</option>
+    <option value="3">3×</option>
+    <option value="4">4×</option>
+  </select></label>
+  <label><input id="sharp" type="checkbox"> Sharp pixels</label>
+  <button id="fullscreen" type="button">Full screen</button>
+</div>
+
+<div class="overlay" id="overlay">
+  <section class="card">
+    <img class="game-icon" src="heroes4.svg" alt="" width="64" height="64">
+    <h1 id="title">Heroes IV</h1>
+    <p id="status">Looking for the game in this browser…</p>
+    <p id="error" class="error" role="alert" hidden></p>
+    <div class="actions" style="justify-content: center">
+      <button id="start" class="primary" type="button" hidden>Play</button>
+      <a id="convert" class="button" href="./" hidden>Convert the game first</a>
+    </div>
+  </section>
+</div>
+<script type="module" src="play.js"></script>
+</body>
+</html>

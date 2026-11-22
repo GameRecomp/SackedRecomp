@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Assemble the converter site: the page (web/), the converter compiled to
+# WebAssembly (rc-web, through wasm-bindgen) and the shell templates.
+#
+#   tools/build-web SITE_DIR [TEMPLATE_DIR [WEB_SHELL_DIR]]
+#
+# TEMPLATE_DIR holds each game's templates, <Stem>-<system>.zip for
+# windows, linux, macos and android (made by `recomp template`); those
+# present are copied. WEB_SHELL_DIR holds the web shells
+# (tools/build-web-shell: sacked.js, crazyschool.js) for playing in the browser; it
+# goes to player/.
+# Systems that platforms.json has off get neither; the file goes to the
+# site too, and the page offers them as off.
+# Needs the wasm32-unknown-unknown target and wasm-bindgen 0.2.130.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+site=${1:?site directory}
+templates=${2:-}
+web_shell=${3:-}
+cargo build --release --target wasm32-unknown-unknown -p rc-web --manifest-path recomp/Cargo.toml ${CARGO_FLAGS:-}
+rm -rf "$site"
+mkdir -p "$site/templates"
+wasm-bindgen --target web --no-typescript --out-dir "$site" \
+    recomp/target/wasm32-unknown-unknown/release/rc_web.wasm
+cp web/index.html web/app.js web/games.js web/worker.js web/style.css web/play.html web/play.js "$site/"
+cp tools/icons/sacked.svg tools/icons/crazyschool.svg "$site/"
+# The version (tools/version) in the page's footer.
+sed -i "s/@VERSION@/$(tools/version)/" "$site/index.html"
+cp platforms.json "$site/platforms.json"
+on() { python3 -c 'import json, sys; sys.exit(0 if json.load(open("platforms.json")).get(sys.argv[1], True) else 1)' "$1"; }
+if [ -n "$templates" ]; then
+    for stem in Sacked CrazySchool; do
+        for s in windows linux macos; do
+            if on "$s" && [ -f "$templates/$stem-$s.zip" ]; then
+                cp "$templates/$stem-$s.zip" "$site/templates/"
+            fi
+        done
+    done
+fi
+if [ -n "$web_shell" ] && on web && [ -d "$web_shell" ]; then
+    mkdir -p "$site/player"
+    cp -r "$web_shell"/. "$site/player/"
+fi
+echo "build-web: $site ($(du -sh "$site" | cut -f1))"

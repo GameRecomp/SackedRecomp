@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Check the Windows build without Windows: the committed tree (HEAD), cross-compiled with
+# MinGW-w64 (UCRT) like the ci preset (null platform, the tests, every warning), and the
+# runtime tests run under Wine, all in a Debian container (Docker).
+#
+#   tools/check-windows
+#
+# It catches what the Linux build does not: POSIX-only functions and headers, Windows-only
+# code paths. MSVC's own warnings (/W4) still need the CI runner. GCC's -Wformat-truncation
+# is off: its guess about a Windows-only path in runtime/src/hostfs.c is no error under MSVC.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+command -v docker > /dev/null || { echo "check-windows: needs docker" >&2; exit 2; }
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+git archive HEAD | tar -x -C "$work"
+docker run --rm -v "$work:/src" -w /src -e OWNER="$(id -u):$(id -g)" debian:trixie bash -c '
+  set -e
+  trap "chown -R \$OWNER /src" EXIT
+  apt-get update -qq > /dev/null
+  apt-get install -y -qq gcc-mingw-w64-ucrt64 binutils-mingw-w64-ucrt64 cmake make wine > /dev/null 2>&1
+  cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-ucrt64.cmake -DCMAKE_BUILD_TYPE=Release \
+        -DRC_WITH_SDL3=OFF -DRC_WARNINGS_AS_ERRORS=ON -DRC_BUILD_TESTS=ON \
+        -DCMAKE_C_FLAGS=-Wno-format-truncation > /dev/null
+  cmake --build build -j"$(nproc)" 2>&1 | grep -E "error|warning" || true
+  test -f build/runtime/rc_runtime_tests.exe
+  export WINEDEBUG=-all WINEPREFIX=/tmp/wine
+  wine wineboot -i > /dev/null 2>&1 || true
+  wine build/runtime/rc_runtime_tests.exe
+'
+echo "check-windows: built, runtime tests passed"

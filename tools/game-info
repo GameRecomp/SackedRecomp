@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# What the build scripts need to know about a game, sourced (as in TropicoRecomp):
+#
+#   . tools/game-info GAME
+#
+# sets GAME_NAME (shown), GAME_STEM (file and folder names; rc_convert::stem), GAME_APP_ID
+# (desktop), GAME_ANDROID_ID (the Android package; unused here), GAME_WEB (the web shell's file
+# name), GAME_ICON (tools/icons/<icon>.svg), GAME_INSTALLER (what the converter takes),
+# GAME_SUMMARY, GAME_DESCRIPTION and GAME_KEYWORDS.
+case "${1:-sacked}" in
+    sacked)
+        GAME_INSTALLER='the CD image or installer of any supported language (downloaded from archive.org)'
+        GAME_NAME="Sacked: Your Last Day"
+        GAME_STEM=Sacked
+        GAME_DESCRIPTION="The 2003 office prank game Sacked (Gefeuert! - Dein letzter Tag) by Limbic Entertainment"
+        GAME_KEYWORDS="Sacked;Gefeuert;office;prank;action;"
+        ;;
+    crazyschool)
+        GAME_INSTALLER='the CD image or installer of any supported language (downloaded from archive.org)'
+        GAME_NAME="Crazy School"
+        GAME_STEM=CrazySchool
+        GAME_DESCRIPTION="The 2003 school prank game Crazy School (Schulverweis) by Limbic Entertainment"
+        GAME_KEYWORDS="Crazy School;Schulverweis;school;prank;action;"
+        ;;
+    *)
+        echo "game-info: unknown game ${1}" >&2
+        return 1 2>/dev/null || exit 1
+        ;;
+esac
+GAME_ID=${1:-sacked}
+GAME_APP_ID=io.github.gamerecomp.${GAME_STEM}Recomp
+GAME_ANDROID_ID=io.github.gamerecomp.$(printf '%s' "$GAME_STEM" | tr '[:upper:]' '[:lower:]')recomp
+GAME_WEB=$GAME_ID
+GAME_ICON=$GAME_ID
+GAME_SUMMARY="$GAME_NAME, recompiled to run natively"

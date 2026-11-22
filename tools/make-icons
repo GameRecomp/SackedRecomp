@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# The programs' icons, from tools/icons/<game>.svg (drawn for this project in the look of the
+# games' own icons), as in TropicoRecomp:
+#
+#   tools/make-icons [OUT_DIR]        (default: build/icons)
+#
+# writes OUT_DIR/<game>/png/<size>.png (16 to 512) and OUT_DIR/<game>.ico, which the Windows
+# build puts into sacked-<game>.exe (cmake/lift.cmake). Rendering needs rsvg-convert
+# (librsvg), else a headless Firefox; ImageMagick's own SVG renderer draws no gradients and is
+# the last resort. Packing the .ico needs ImageMagick (7's `magick`, or 6's `convert`, which
+# Ubuntu ships).
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+out=${1:-build/icons}
+if command -v magick > /dev/null; then
+    magick() { command magick "$@"; }
+elif command -v convert > /dev/null; then
+    magick() { convert "$@"; }
+else
+    echo "make-icons: needs ImageMagick (magick or convert)" >&2
+    exit 1
+fi
+render() { # svg size png
+    if command -v rsvg-convert > /dev/null; then
+        rsvg-convert -w "$2" -h "$2" -o "$3" "$1"
+    elif command -v firefox > /dev/null; then
+        local tmp
+        tmp=$(mktemp -d)
+        printf '<html><body style="margin:0;background:transparent"><img src="file://%s" width="%s" height="%s"></body></html>' \
+            "$(realpath "$1")" "$2" "$2" > "$tmp/i.html"
+        firefox --headless --no-remote --profile "$tmp" --screenshot "$tmp/i.png" \
+            --window-size="$2,$2" "file://$tmp/i.html" > /dev/null 2>&1
+        # Firefox has no transparent background: the corners outside the ring become clear.
+        magick "$tmp/i.png" -alpha set \( +clone -alpha transparent -fill white -draw "circle $(($2/2)),$(($2/2)) $(($2/2)),0" \) \
+            -compose DstIn -composite "PNG32:$3"
+        rm -rf "$tmp"
+    else
+        echo "make-icons: no rsvg-convert or firefox; ImageMagick draws no gradients" >&2
+        magick -background none -density 384 "$1" -resize "${2}x$2" "PNG32:$3"
+    fi
+}
+for svg in tools/icons/*.svg; do
+    game=$(basename "$svg" .svg)
+    png=$out/$game/png
+    mkdir -p "$png"
+    for s in 16 24 32 48 64 128 256 512; do
+        render "$svg" "$s" "$png/$s.png"
+    done
+    magick "$png/16.png" "$png/24.png" "$png/32.png" "$png/48.png" "$png/64.png" "$png/128.png" "$png/256.png" "$out/$game.ico"
+done
+echo "make-icons: $out"

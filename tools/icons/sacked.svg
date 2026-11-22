@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- SackedRecomp's icon: a cardboard box of office things (the last day at work) with a tipped-over
+     coffee mug, on a blue field. Drawn for this project from simple shapes, no game art. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="field" cx="0.5" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#5fb4ff"/>
+      <stop offset="1" stop-color="#123e86"/>
+    </radialGradient>
+    <linearGradient id="box" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e3b26b"/>
+      <stop offset="1" stop-color="#a86e2a"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="url(#field)"/>
+  <!-- things sticking out of the box: a plant, a ruler, a folder -->
+  <rect x="150" y="58" width="14" height="70" rx="3" fill="#f5d33b" transform="rotate(12 157 93)"/>
+  <rect x="78" y="70" width="58" height="62" rx="4" fill="#e9eef5" transform="rotate(-10 107 101)"/>
+  <rect x="86" y="84" width="40" height="5" fill="#9fb2c8" transform="rotate(-10 107 101)"/>
+  <rect x="86" y="96" width="34" height="5" fill="#9fb2c8" transform="rotate(-10 107 101)"/>
+  <path d="M176 128 C170 96 182 78 196 70 C192 90 196 104 188 128 Z" fill="#3fae4f"/>
+  <path d="M186 128 C192 104 210 96 222 98 C210 108 204 118 200 128 Z" fill="#2f9140"/>
+  <!-- the box -->
+  <path d="M54 124 L202 124 L192 214 L64 214 Z" fill="url(#box)"/>
+  <path d="M54 124 L202 124 L196 140 L60 140 Z" fill="#8a5620" opacity="0.45"/>
+  <rect x="104" y="160" width="48" height="22" rx="4" fill="#c58a3e"/>
+  <!-- the mug, tipped over, and its coffee -->
+  <path d="M30 206 C60 196 96 206 120 214 L30 222 Z" fill="#5a3214"/>
+  <g transform="rotate(-70 50 190)">
+    <rect x="30" y="170" width="40" height="44" rx="6" fill="#ffffff"/>
+    <path d="M70 180 C86 180 86 204 70 204" fill="none" stroke="#ffffff" stroke-width="7"/>
+    <rect x="30" y="170" width="40" height="8" rx="3" fill="#d23a2a"/>
+  </g>
+</svg>

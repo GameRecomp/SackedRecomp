@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# The version of the builds: the repository's VERSION file.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+tr -d '[:space:]' < VERSION
+echo

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- SackedRecomp's icon for Crazy School: a green chalkboard with a scribble and a paper plane
+     flying off it, on an orange field. Drawn for this project from simple shapes, no game art. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="field" cx="0.5" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#ffc35a"/>
+      <stop offset="1" stop-color="#c2410c"/>
+    </radialGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="url(#field)"/>
+  <!-- the board in its wooden frame -->
+  <rect x="34" y="52" width="188" height="128" rx="8" fill="#8b5a2b"/>
+  <rect x="44" y="62" width="168" height="108" rx="4" fill="#2f6b45"/>
+  <rect x="60" y="180" width="136" height="10" rx="3" fill="#8b5a2b"/>
+  <rect x="150" y="174" width="22" height="7" rx="2" fill="#f4f4f4"/>
+  <!-- chalk: a scribbled sum and a crossed-out grade -->
+  <path d="M60 92 L80 92 M70 82 L70 102 M92 92 L112 92 M92 100 L112 100" stroke="#eef3ee" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <text x="122" y="104" font-family="sans-serif" font-size="30" font-weight="bold" fill="#eef3ee">?</text>
+  <path d="M64 124 C88 112 108 140 130 126 S170 118 190 132" stroke="#eef3ee" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <text x="150" y="104" font-family="sans-serif" font-size="34" font-weight="bold" fill="#ffd6d6">6</text>
+  <path d="M146 76 L184 110" stroke="#ff8a8a" stroke-width="5" stroke-linecap="round"/>
+  <!-- the paper plane -->
+  <g transform="translate(150 150) rotate(-18)">
+    <path d="M0 30 L86 0 L30 40 Z" fill="#ffffff"/>
+    <path d="M30 40 L86 0 L40 58 Z" fill="#dfe6ee"/>
+    <path d="M30 40 L36 62 L44 52 Z" fill="#b8c4d2"/>
+  </g>
+  <path d="M120 206 C130 196 140 196 146 188" stroke="#ffffff" stroke-width="3" stroke-dasharray="6 6" fill="none"/>
+</svg>

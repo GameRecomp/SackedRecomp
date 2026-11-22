@@ -1,0 +1,46 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "RC_BUILD_TESTS": "ON" }
+    },
+    {
+      "name": "dev",
+      "displayName": "Debug, tests, SDL3 if found",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "RC_WITH_SDL3": "AUTO" }
+    },
+    {
+      "name": "release",
+      "displayName": "RelWithDebInfo, SDL3 required",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "RC_WITH_SDL3": "ON" }
+    },
+    {
+      "name": "ci",
+      "displayName": "CI: warnings as errors, null platform",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "RC_WITH_SDL3": "OFF",
+        "RC_WARNINGS_AS_ERRORS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "dev", "configurePreset": "dev", "configuration": "Debug" },
+    { "name": "release", "configurePreset": "release", "configuration": "RelWithDebInfo" },
+    { "name": "ci", "configurePreset": "ci", "configuration": "Release" }
+  ],
+  "testPresets": [
+    { "name": "dev", "configurePreset": "dev", "configuration": "Debug", "output": { "outputOnFailure": true } },
+    { "name": "release", "configurePreset": "release", "configuration": "RelWithDebInfo", "output": { "outputOnFailure": true } },
+    { "name": "ci", "configurePreset": "ci", "configuration": "Release", "output": { "outputOnFailure": true } }
+  ]
+}

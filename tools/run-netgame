@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Run a scripted network game of two programs on this machine and check it.
+#
+#   tools/run-netgame GAME SCENARIO
+#
+# Reads games/GAME/scenarios/SCENARIO.conf:
+#   HOST=file, JOIN=file  the scripted input of the hosting and the joining program; their
+#                         `shot`/`wait` lines (hle/frames.c) line the two up, through files in a
+#                         folder that replaces @SYNC@ in them
+#   FRAMES=N              both programs run N frames
+#   JOIN_FRAMES=N         the joining program runs N frames (default FRAMES: give it more when the
+#                         host waits for it, so that it does not leave first)
+#   TIMEOUT=S             seconds (default 600)
+# Both run headless on the virtual clock (RC_TRACE=dplay), each with a fresh user directory.
+# The run passes when both reach frame N; the timing of the network is not on the virtual
+# clock, so nothing is compared: the last frame of each program is kept as a screenshot in
+# build/scenarios for a look, with the logs.
+set -u
+cd "$(git rev-parse --show-toplevel)" || exit 2
+game=${1:?game}
+scenario=${2:?scenario}
+dir_s="games/$game/scenarios"
+conf="$dir_s/$scenario.conf"
+[ -f "$conf" ] || { echo "no scenario $conf" >&2; exit 2; }
+HOST=
+JOIN=
+FRAMES=
+JOIN_FRAMES=
+TIMEOUT=600
+# shellcheck disable=SC1090
+. "$conf"
+JOIN_FRAMES=${JOIN_FRAMES:-$FRAMES}
+
+bin=${RC_BIN:-build/dev/games/$game/sacked-$game}
+[ -x "$bin" ] || { echo "build $bin first (cmake --build --preset dev)" >&2; exit 2; }
+var=$(printf '%s_DIR' "$game" | tr '[:lower:]' '[:upper:]')
+default_dir=orig/$game/gog-de
+dir=${!var:-$default_dir}
+
+out=build/scenarios
+mkdir -p "$out"
+sync=$(mktemp -d)
+trap 'rm -rf "$sync"' EXIT
+pids=()
+for side in host join; do
+    input=$HOST
+    frames=$FRAMES
+    if [ "$side" = join ]; then
+        input=$JOIN
+        frames=$JOIN_FRAMES
+    fi
+    sed "s#@SYNC@#$sync#g" "$dir_s/$input" > "$sync/$side.input"
+    mkdir -p "$sync/$side-user"
+    env SDL_VIDEO_DRIVER=dummy SDL_AUDIO_DRIVER=dummy RC_CLOCK=virtual RC_RESOLUTION=${RC_RESOLUTION:-off} \
+        RC_TRACE=dplay RC_FRAMES="$frames" RC_INPUT="$sync/$side.input" \
+        RC_SCREENSHOT="$((frames - 10)):$out/$game-$scenario-$side.bmp" \
+        timeout "$TIMEOUT" "$bin" --game-dir "$dir" --user-dir "$sync/$side-user" \
+        > "$out/$game-$scenario-$side.log" 2>&1 &
+    pids+=($!)
+done
+ok=1
+for i in 0 1; do
+    side=host
+    frames=$FRAMES
+    if [ "$i" = 1 ]; then
+        side=join
+        frames=$JOIN_FRAMES
+    fi
+    wait "${pids[$i]}"
+    code=$?
+    log="$out/$game-$scenario-$side.log"
+    if [ "$code" != 0 ] || ! grep -q "reached frame $frames" "$log"; then
+        echo "$game/$scenario: $side FAILED (exit $code), see $log"
+        ok=0
+    else
+        echo "$game/$scenario: $side reached frame $frames ($(grep -c 'message 0xffff0011' "$log") messages received)"
+    fi
+done
+[ "$ok" = 1 ] && echo "$game/$scenario: PASS (screenshots $out/$game-$scenario-{host,join}.bmp)"
+[ "$ok" = 1 ]

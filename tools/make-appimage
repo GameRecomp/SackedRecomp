@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Wrap a built Linux shell into an AppImage (CI's Linux template).
+#
+#   tools/make-appimage SHELL OUT.AppImage [ICON_DIR [GAME]]
+#
+# The shell is self-contained (SDL linked statically, X11, Wayland and
+# sound loaded at run time), so the AppImage holds just it, a desktop
+# entry, AppStream metainfo and the game's icon: the SVG, and the PNGs of
+# tools/make-icons in ICON_DIR (default build/icons) if they are there.
+# The version (tools/version) goes into the desktop entry and the
+# metainfo. appimagetool is downloaded into build/ once.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+shell=${1:?shell}
+out=${2:?output}
+icons=${3:-build/icons}
+game=${4:-sacked}
+. tools/game-info "$game"
+arch=x86_64
+id=$GAME_APP_ID
+exe=$(printf '%s' "$GAME_STEM" | tr '[:upper:]' '[:lower:]')
+version=$(tools/version)
+date=$(git log -1 --format=%cs 2>/dev/null || date +%F)
+tool=build/appimage/appimagetool-$arch.AppImage
+if [ ! -x "$tool" ]; then
+    mkdir -p build/appimage
+    curl -fsSL -o "$tool" \
+        "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$arch.AppImage"
+    chmod +x "$tool"
+fi
+dir=build/appimage/$GAME_STEM.AppDir
+rm -rf "$dir"
+mkdir -p "$dir/usr/bin"
+cp "$shell" "$dir/usr/bin/$exe"
+share=$dir/usr/share
+mkdir -p "$share/icons/hicolor/scalable/apps" "$share/applications" "$share/metainfo"
+cp "tools/icons/$GAME_ICON.svg" "$share/icons/hicolor/scalable/apps/$id.svg"
+cp "tools/icons/$GAME_ICON.svg" "$dir/$id.svg"
+pngs=$icons/$GAME_ICON/png
+if [ -d "$pngs" ]; then
+    for s in 16 24 32 48 64 128 256 512; do
+        mkdir -p "$share/icons/hicolor/${s}x${s}/apps"
+        cp "$pngs/$s.png" "$share/icons/hicolor/${s}x${s}/apps/$id.png"
+    done
+    cp "$pngs/256.png" "$dir/.DirIcon"
+fi
+cat > "$share/applications/$id.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=$GAME_NAME
+GenericName=Settlement strategy game
+Comment=$GAME_SUMMARY
+Exec=$exe
+Icon=$id
+Categories=Game;StrategyGame;Simulation;
+Keywords=$GAME_KEYWORDS
+Terminal=false
+StartupWMClass=$exe
+X-AppImage-Name=$GAME_NAME
+X-AppImage-Version=$version
+DESKTOP
+cp "$share/applications/$id.desktop" "$dir/$id.desktop"
+cat > "$share/metainfo/$id.appdata.xml" <<METAINFO
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<component type="desktop-application">
+  <id>$id</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>$GAME_NAME</name>
+  <summary>$GAME_SUMMARY</summary>
+  <description>
+    <p>
+      $GAME_DESCRIPTION, recompiled from your own copy into a
+      native program by SackedRecomp. This package holds the user's copy of
+      the game: it was made by the converter on the user's machine and is not
+      to be shared.
+    </p>
+  </description>
+  <developer id="io.github.gamerecomp">
+    <name>SackedRecomp</name>
+  </developer>
+  <launchable type="desktop-id">$id.desktop</launchable>
+  <url type="homepage">https://gamerecomp.github.io/SackedRecomp/</url>
+  <url type="vcs-browser">https://github.com/GameRecomp/SackedRecomp</url>
+  <categories>
+    <category>Game</category>
+    <category>StrategyGame</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="$version" date="$date"/>
+  </releases>
+</component>
+METAINFO
+cat > "$dir/AppRun" <<APPRUN
+#!/bin/sh
+exec "\$(dirname "\$(readlink -f "\$0")")/usr/bin/$exe" "\$@"
+APPRUN
+chmod +x "$dir/AppRun"
+mkdir -p "$(dirname "$out")"
+# Without FUSE (containers, CI) the tool runs from its extracted self.
+ARCH=$arch APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --no-appstream "$dir" "$out" > build/appimage/tool.log 2>&1 \
+    || { cat build/appimage/tool.log; exit 1; }
+echo "make-appimage: $out"
