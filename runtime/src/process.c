@@ -264,6 +264,9 @@ static rc_module *load_image(const char *name, const uint8_t *file, uint32_t siz
             if (lifted && !addr) {
                 rc_fatal("%s imports %s!%s, which %s does not export", name, dll, fn, lifted->name);
             }
+            if (!addr) {
+                addr = rc_data_address(dll, fn); /* a variable (msvcrt's _iob) */
+            }
             rc_st32(base + ft + 4 * j, addr ? addr : rc_import_address(dll, fn));
         }
     }

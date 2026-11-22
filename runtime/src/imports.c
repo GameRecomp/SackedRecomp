@@ -82,7 +82,39 @@ static rc_fn find(const char *dll, const char *name)
     return NULL;
 }
 
-bool rc_import_implemented(const char *dll, const char *name) { return find(dll, name) != NULL; }
+bool rc_import_implemented(const char *dll, const char *name)
+{
+    return find(dll, name) != NULL || rc_data_address(dll, name) != 0;
+}
+
+/* Variables HLE modules export. */
+#define DATA_MAX 64u
+static struct {
+    const char *dll, *name;
+    rc_data_fn addr;
+} data_exports[DATA_MAX];
+static uint32_t ndata;
+
+void rc_register_data(const char *dll, const char *name, rc_data_fn addr)
+{
+    if (ndata == DATA_MAX) {
+        rc_fatal("too many HLE variables");
+    }
+    data_exports[ndata].dll = dll;
+    data_exports[ndata].name = name;
+    data_exports[ndata].addr = addr;
+    ndata++;
+}
+
+uint32_t rc_data_address(const char *dll, const char *name)
+{
+    for (uint32_t i = 0; i < ndata; i++) {
+        if (dll_eq(data_exports[i].dll, dll) && strcmp(data_exports[i].name, name) == 0) {
+            return data_exports[i].addr();
+        }
+    }
+    return 0;
+}
 
 static void unimplemented(rc_cpu *c)
 {

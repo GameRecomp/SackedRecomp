@@ -46,6 +46,13 @@ typedef struct rc_import_def {
 /* Make functions available to the loader and to GetProcAddress. */
 void rc_register_imports(const rc_import_def *defs, uint32_t count);
 
+/* A variable an HLE module exports (msvcrt's _iob): `addr` gives its guest address, asked when an
+ * import of it is bound. */
+typedef uint32_t (*rc_data_fn)(void);
+void rc_register_data(const char *dll, const char *name, rc_data_fn addr);
+/* The guest address of an exported variable, 0 if no module exports dll!name. */
+uint32_t rc_data_address(const char *dll, const char *name);
+
 /* The reserved address for dll!name, allocating one if needed. */
 uint32_t rc_import_address(const char *dll, const char *name);
 
