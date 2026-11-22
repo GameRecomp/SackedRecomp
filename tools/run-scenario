@@ -15,7 +15,7 @@
 #                      changed in the user directory's copy of it (made
 #                      from the game's at the start of the run)
 # and runs build/dev/games/GAME/sacked-GAME (or $RC_BIN) headless, on the virtual clock, on the
-# game in $<GAME>_DIR (default orig/<game>/gog-de) with a fresh user directory, at the
+# game in $<GAME>_DIR (default orig/<game>/cd-de) with a fresh user directory, at the
 # game's own resolution (RC_RESOLUTION=off unless set: a fresh settings.ini
 # would follow the window, whose size depends on the screen).
 #
@@ -46,7 +46,7 @@ INI_SET=
 bin=${RC_BIN:-build/dev/games/$game/sacked-$game}
 [ -x "$bin" ] || { echo "build $bin first (cmake --build --preset dev)" >&2; exit 2; }
 var=$(printf '%s_DIR' "$game" | tr '[:lower:]' '[:upper:]')
-default_dir=orig/$game/gog-de
+default_dir=orig/$game/cd-de
 dir=${!var:-$default_dir}
 
 out=build/scenarios
