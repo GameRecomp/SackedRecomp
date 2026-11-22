@@ -231,6 +231,7 @@ void rc_record_event(const rc_event *e)
 void rc_present_hook(unsigned frame)
 {
     current_frame = frame;
+    rc_clock_frame();
     if (shot_path[0]) {
         rc_log("screenshot of frame %u: %s%s", frame, shot_path, rc_plat_screenshot(shot_path) ? "" : " failed");
         shot_path[0] = 0;

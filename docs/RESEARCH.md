@@ -58,6 +58,14 @@ appear here; disassembly, lifted or decompiled code never does.
 The Vorbis DLLs of Sacked are the same in every language (one build); Crazy School has two builds (de/ru and pl).
 Whether the localised game builds differ in code beyond their texts is **(open)** (M2: `recomp codediff`).
 
+## Game time in scripted runs
+
+- Sacked reads `GetTickCount` about ten times a frame in a level. The virtual clock (`RC_CLOCK=virtual`) moves
+  0.1 ms a reading, so a frame lasted about 1 ms of game time and the level clock stayed at 00:00.
+  `RC_CLOCK_FPS=N` (scenario `FPS=N`) makes every presented frame take at least 1/N s: at 60, 1200 frames in
+  the first level move its clock by exactly 20 seconds (00:05 to 00:25). Scenarios that play a level through
+  use it; the others keep the old model and their references.
+
 ## The browser download
 
 - Both files are served by archive.org through a redirect (`archive.org/download/<item>/<file>` → a mirror

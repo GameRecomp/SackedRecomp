@@ -38,6 +38,8 @@ static uint64_t host_ms(void)
 static int virtual_clock = -1;
 static uint64_t virtual_us = UINT64_C(1000000000);
 static uint64_t step_us = 100;
+static uint64_t frame_us;      /* RC_CLOCK_FPS: the shortest frame, 0 for none */
+static uint64_t last_frame_us; /* when the last frame was presented */
 
 static int is_virtual(void)
 {
@@ -48,11 +50,26 @@ static int is_virtual(void)
         if (st && atoi(st) > 0) {
             step_us = (uint64_t)atoi(st);
         }
+        const char *fps = getenv("RC_CLOCK_FPS");
+        if (fps && atoi(fps) > 0) {
+            frame_us = UINT64_C(1000000) / (uint64_t)atoi(fps);
+        }
     }
     return virtual_clock;
 }
 
 bool rc_clock_virtual(void) { return is_virtual() != 0; }
+
+void rc_clock_frame(void)
+{
+    if (!is_virtual() || !frame_us) {
+        return;
+    }
+    if (virtual_us < last_frame_us + frame_us) {
+        virtual_us = last_frame_us + frame_us;
+    }
+    last_frame_us = virtual_us;
+}
 
 void rc_sleep_ms(uint32_t ms)
 {

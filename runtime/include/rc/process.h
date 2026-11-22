@@ -112,6 +112,12 @@ void rc_sleep_ms(uint32_t ms);
 bool rc_clock_virtual(void);
 /* rc_ticks_ms without advancing the virtual clock. */
 uint64_t rc_ticks_peek_ms(void);
+/* A frame has been presented. With the virtual clock and RC_CLOCK_FPS=N, it
+ * moves on to at least 1/N s after the last frame, as a display at N Hz
+ * paces a game, so the game's own timers (a level's clock) run as on a real
+ * machine. Without RC_CLOCK_FPS, frames take only the time the program
+ * reads. */
+void rc_clock_frame(void);
 
 /* A small guest allocation that lives as long as the process. */
 uint32_t rc_proc_alloc(uint32_t size);

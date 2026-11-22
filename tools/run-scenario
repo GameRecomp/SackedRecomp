@@ -11,6 +11,9 @@
 #   SCREENSHOT=N       compare frame N with the accepted screenshot
 #   TOLERANCE=B        differing bytes allowed in that comparison (default 0)
 #   TIMEOUT=S          seconds (default 60)
+#   FPS=N              each frame takes at least 1/N s of the virtual clock, so the
+#                      game's own timers run as on a real machine (default: frames
+#                      take only the time the program reads)
 #   INI_SET="F:K=V ..." settings in the game's initialisation file F,
 #                      changed in the user directory's copy of it (made
 #                      from the game's at the start of the run)
@@ -39,6 +42,7 @@ INPUT=
 SCREENSHOT=
 TOLERANCE=0
 TIMEOUT=60
+FPS=
 INI_SET=
 # shellcheck disable=SC1090
 . "$conf"
@@ -63,7 +67,7 @@ done
 shot=
 [ -n "$SCREENSHOT" ] && shot="$SCREENSHOT:$base.bmp"
 rm -f "$base.bmp"
-RC_CLOCK=virtual RC_RESOLUTION=${RC_RESOLUTION:-off} SDL_VIDEO_DRIVER=${SDL_VIDEO_DRIVER:-dummy} SDL_AUDIO_DRIVER=${SDL_AUDIO_DRIVER:-dummy} RC_STOP_AT="$STOP_AT" RC_FRAMES="$FRAMES" \
+RC_CLOCK=virtual RC_CLOCK_FPS="$FPS" RC_RESOLUTION=${RC_RESOLUTION:-off} SDL_VIDEO_DRIVER=${SDL_VIDEO_DRIVER:-dummy} SDL_AUDIO_DRIVER=${SDL_AUDIO_DRIVER:-dummy} RC_STOP_AT="$STOP_AT" RC_FRAMES="$FRAMES" \
     RC_INPUT="${INPUT:+$dir_s/$INPUT}" RC_SCREENSHOT="$shot" RC_TRACE=imports \
     timeout "$TIMEOUT" "$bin" --game-dir "$dir" --user-dir "$user" 2>&1 |
     LC_ALL=C awk -v gz="gzip -n > $base.trace.gz" -v logf="$log" '
