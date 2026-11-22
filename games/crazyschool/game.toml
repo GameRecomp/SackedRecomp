@@ -75,6 +75,16 @@ size = 798720
 sha256 = "d7ec2e7a5dc0b807f40d74f56e0dedb9265c374ff79d4d5ab680eebccedb2822"
 variants = ["pl"]
 notes = "The Polish build (2004-06), MSVC 7.1, statically linked CRT."
+[binary.discover]
+# Functions nothing references directly (behind int3 fill), and the DirectX error text functions.
+seeds = [
+    0x00416550, 0x004184e0, 0x00420030, 0x00420050, 0x0042e4f0, 0x0042f9e0, 0x00431ef0, 0x004330f0,
+    0x00444500, 0x00445330, 0x0046b951, 0x0046e2fc, 0x0047352c, 0x00475240,
+    0x00474e3d, # a block that "ENG" in .rdata (read as the pointer 0x474e45) would cut in two
+    0x00475547, # the same for text read as the pointer 0x47554c
+]
+returns = [0x00461875]   # CRT x87 argument load: returns; a second entry follows each call to it
+
 
 # --- libraries -----------------------------------------------------------------
 # All three are linked for 0x10000000: vorbis.dll and vorbisfile.dll are moved.
