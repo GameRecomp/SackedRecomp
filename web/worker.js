@@ -5,7 +5,7 @@
 //
 // For the browser ("web"), the game's files and its code (a WebAssembly
 // module for the web shell) go into the origin's private file system
-// (OPFS) under the game's id (heroes4/), through synchronous
+// (OPFS) under the game's id (sacked/), through synchronous
 // access handles, which also
 // only workers have; info.json, written last, marks a complete game.
 //
@@ -186,7 +186,7 @@ self.onmessage = async (event) => {
     const progress = (stage, done, total) => self.postMessage({ type: 'progress', stage, done, total });
     let summary;
     if (mode === 'update') {
-      const r = await updateCode(game || 'heroes4', progress);
+      const r = await updateCode(game || 'sacked', progress);
       self.postMessage({ type: 'done', ...r });
       return;
     }

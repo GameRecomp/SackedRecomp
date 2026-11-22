@@ -13,8 +13,8 @@
 //   The canvas holds the game's frame at its own size; the page scales it:
 //   as large as fits, or by a whole number of device pixels.
 
-// The game is the page's ?game= (heroes4); each has its own web
-// shell (player/heroes4.js), loaded when the game
+// The game is the page's ?game= (sacked); each has its own web
+// shell (player/sacked.js), loaded when the game
 // starts: a site built without it says so instead of failing to load the
 // page.
 import { gameOf, showIcon } from './games.js';

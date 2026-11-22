@@ -6,7 +6,7 @@
 #   tools/build-web SITE_DIR [TEMPLATE_DIR [WEB_SHELL_DIR]]
 #
 # TEMPLATE_DIR holds each game's templates, <Stem>-<system>.zip for
-# windows, linux, macos and android (made by `recomp template`); those
+# windows, linux and macos (made by `recomp template`); those
 # present are copied. WEB_SHELL_DIR holds the web shells
 # (tools/build-web-shell: sacked.js, crazyschool.js) for playing in the browser; it
 # goes to player/.
@@ -25,6 +25,7 @@ wasm-bindgen --target web --no-typescript --out-dir "$site" \
     recomp/target/wasm32-unknown-unknown/release/rc_web.wasm
 cp web/index.html web/app.js web/games.js web/worker.js web/style.css web/play.html web/play.js "$site/"
 cp tools/icons/sacked.svg tools/icons/crazyschool.svg "$site/"
+cp -r web/flags "$site/flags"
 # The version (tools/version) in the page's footer.
 sed -i "s/@VERSION@/$(tools/version)/" "$site/index.html"
 cp platforms.json "$site/platforms.json"

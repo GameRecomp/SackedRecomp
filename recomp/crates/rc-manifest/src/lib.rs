@@ -623,6 +623,19 @@ mod tests {
     }
 
     #[test]
+    fn the_converter_page_offers_every_medium() {
+        // web/games.js lists the releases the page downloads: the same files as the manifests.
+        let page = fs::read_to_string(repo_games().join("../web/games.js")).expect("web/games.js");
+        let ms = load_dir(&repo_games()).unwrap();
+        for v in ms.iter().flat_map(|m| &m.variants) {
+            for md in &v.media {
+                assert!(page.contains(&md.sha256), "web/games.js lacks {} ({})", md.file, md.sha256);
+                assert!(page.contains(&md.size.to_string()), "web/games.js lacks the size of {}", md.file);
+            }
+        }
+    }
+
+    #[test]
     fn validation_reports_errors() {
         let text = r#"
             schema = 1

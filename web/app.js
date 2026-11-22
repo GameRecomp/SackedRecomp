@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-// The converter page: choose the installer and the system, then run the
-// worker and write what it produces to a file. Nothing is uploaded. For the
+// The converter page: choose the system and a language, whose release is
+// downloaded from archive.org and checked (or the user's own copy), then run
+// the worker and write what it produces to a file. Nothing is uploaded. For the
 // browser, the worker stores the game in this origin's private storage
 // instead, and play.html runs it.
 
@@ -8,7 +9,7 @@ import { GAMES, gameOf, showIcon } from './games.js';
 
 const $ = (id) => document.getElementById(id);
 
-/* The game chosen by the tabs (and kept in the address: ?game=heroes4). */
+/* The game chosen by the tabs (and kept in the address: ?game=sacked). */
 let game = gameOf(window.location);
 
 const STAGES = [
@@ -37,19 +38,11 @@ function systems() {
       after: 'The game is stored in this browser, for this site only. Play it now, or come back to this page '
         + 'any time. Saved games and settings are kept in the browser too.',
     },
-    android: {
-      label: 'Android',
-      file: `${app}.apk`,
-      type: { description: 'Android app', accept: { 'application/vnd.android.package-archive': ['.apk'] } },
-      after: `Copy ${app}.apk to your phone or tablet and open it there to install it (allow installing from `
-        + 'that app when asked). On its first start the game unpacks its files once, which takes a minute.',
-    },
   };
 }
 
 function guessSystem() {
   const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent;
-  if (/android/i.test(p) || /android/i.test(navigator.userAgent)) return 'android';
   if (/win/i.test(p)) return 'windows';
   if (/mac|iphone|ipad/i.test(p)) return 'macos';
   return 'linux';
@@ -114,8 +107,8 @@ async function removeStored() {
 function updateNote() {
   const web = document.querySelector('input[name=system]:checked')?.value === 'web';
   $('convert-note').textContent = web
-    ? `The game (${game.size}) is stored in this browser; nothing is downloaded. Converting takes a few minutes.`
-    : `The result is a zip (for Android an APK) of ${game.size} with the game in it. You choose where it is saved.`;
+    ? `The game (${game.size}) is stored in this browser. Converting takes a few minutes.`
+    : `The result is a zip of ${game.size} with the game in it. You choose where it is saved.`;
   updateView();
 }
 
@@ -146,6 +139,82 @@ function setFiles(list) {
   $('start').disabled = !file || (needSlice && !slice);
 }
 function setFile(f) { setFiles(f ? [f] : []); }
+
+/* ---- the archived releases ---- */
+
+let downloading = null; /* an AbortController while a download runs */
+
+function hex(buf) {
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/* Download the release of `lang`, check it, and convert it. */
+async function fetchRelease(lang) {
+  if (running || downloading) return;
+  const note = $('download-note');
+  $('error').hidden = true;
+  $('result').hidden = true;
+  for (const b of document.querySelectorAll('#languages button')) b.disabled = true;
+  downloading = new AbortController();
+  const forGame = game;
+  try {
+    note.textContent = `${lang.title}: connecting to archive.org…`;
+    const r = await fetch(lang.url, { signal: downloading.signal });
+    if (!r.ok || !r.body) throw new Error(`archive.org answered ${r.status}`);
+    const reader = r.body.getReader();
+    const parts = [];
+    let got = 0;
+    const t0 = performance.now();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value);
+      got += value.length;
+      const rate = got / Math.max(1, performance.now() - t0);
+      const left = rate > 0 ? (lang.size - got) / rate : 0;
+      note.textContent = `${lang.title}: ${mib(got)} of ${mib(lang.size)} downloaded · about ${clock(left)} left`;
+    }
+    if (got !== lang.size) throw new Error(`the download has ${got} bytes, not ${lang.size}`);
+    note.textContent = `${lang.title}: checking the download…`;
+    const blob = new Blob(parts);
+    const sum = hex(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
+    if (sum !== lang.sha256) throw new Error('the download is not the archived file (its SHA-256 differs)');
+    if (forGame !== game) return;
+    note.textContent = `${lang.title}: downloaded and checked (${mib(lang.size)}).`;
+    setFiles([new File([blob], lang.file)]);
+    start();
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    note.textContent = '';
+    showError(`Cannot download ${lang.title}: ${err.message || err}. You can download it yourself from `
+      + `${lang.url} and choose it below.`);
+  } finally {
+    downloading = null;
+    for (const b of document.querySelectorAll('#languages button')) b.disabled = running;
+  }
+}
+
+/* The game's languages as flags. */
+function showLanguages() {
+  const box = $('languages');
+  box.replaceChildren();
+  for (const lang of game.languages) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'language';
+    b.title = `${lang.title} (${lang.label}), ${mib(lang.size)} from archive.org`;
+    const img = document.createElement('img');
+    img.src = `flags/${lang.flag || lang.code}.svg`;
+    img.alt = '';
+    img.height = 24;
+    const label = document.createElement('span');
+    label.textContent = lang.label;
+    b.append(img, label);
+    b.addEventListener('click', () => fetchRelease(lang));
+    box.append(b);
+  }
+  $('installer').textContent = game.languages[0].file;
+}
 
 function buildStageList() {
   const list = $('stages');
@@ -398,11 +467,8 @@ function showGame() {
   document.title = `${game.name} Converter`;
   showIcon(game);
   $('game-name').textContent = game.full || game.name;
-  $('installer').textContent = game.installer;
-  $('installer-size').textContent = game.installerSize;
-  $('zip-size').textContent = game.installerSize;
-  $('source-gog').hidden = game.source === 'zip';
-  $('source-zip').hidden = game.source !== 'zip';
+  $('download-note').textContent = '';
+  showLanguages();
   for (const t of document.querySelectorAll('.tabs button')) {
     const on = t.dataset.game === game.id;
     t.classList.toggle('on', on);
@@ -433,7 +499,7 @@ function showGame() {
 
 for (const t of document.querySelectorAll('.tabs button')) {
   t.addEventListener('click', () => {
-    if (running || GAMES[t.dataset.game] === game) return;
+    if (running || downloading || GAMES[t.dataset.game] === game) return;
     game = GAMES[t.dataset.game];
     setFile(null);
     $('result').hidden = true;
@@ -455,7 +521,7 @@ fetch('platforms.json', { cache: 'no-cache' })
   .then((r) => (r.ok ? r.json() : {}))
   .catch(() => ({}))
   .then((on) => {
-    for (const system of ['windows', 'linux', 'macos', 'android', 'web']) {
+    for (const system of ['windows', 'linux', 'macos', 'web']) {
       if (on[system] === false) offAlways.set(system, 'disabled on this site for now');
     }
     showGame();
