@@ -8,7 +8,7 @@
 //! 64-bit sizes and an MD5 per file (checked here) and may link a file to another one's data.
 
 use crate::md5::Md5;
-use crate::{codepage, cstr, format_err, le16, le32, Archive, Entry, Error, ReadSeek, Result};
+use crate::{codepage, cstr, format_err, le16, le32, Archive, Entry, Error, ReadSeek, Result, Sink};
 use flate2::{Decompress, FlushDecompress, Status};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -279,6 +279,21 @@ impl Cabinet {
     }
 }
 
+/// Feeds a [`Sink`] as a [`Write`].
+struct SinkWriter<'s>(&'s mut dyn Sink);
+
+impl Write for SinkWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .write(buf)
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 /// Hashes what passes through to the writer.
 struct Md5Writer<'w>(Md5, &'w mut dyn Write);
 
@@ -341,6 +356,34 @@ fn inflate_chunks(mut data: &[u8], out: &mut dyn Write) -> Result<u64> {
 impl Archive for Cabinet {
     fn entries(&self) -> &[Entry] {
         &self.entries
+    }
+
+    fn extract_to(
+        &mut self,
+        sink: &mut dyn Sink,
+        select: &dyn Fn(&Entry) -> bool,
+    ) -> Result<usize> {
+        let mut dirs = std::collections::BTreeSet::new();
+        for e in &self.entries {
+            if let Some((d, _)) = e.path.rsplit_once('/') {
+                dirs.insert(d.to_string());
+            }
+        }
+        for d in dirs {
+            sink.dir(&d)?;
+        }
+        let mut n = 0;
+        for k in 0..self.entries.len() {
+            if !select(&self.entries[k]) {
+                continue;
+            }
+            let (path, size) = (self.entries[k].path.clone(), self.entries[k].size);
+            sink.begin(&path, size)?;
+            self.write_file(k, &mut SinkWriter(sink))?;
+            sink.end()?;
+            n += 1;
+        }
+        Ok(n)
     }
 
     fn extract(&mut self, dest: &Path, select: &dyn Fn(&Entry) -> bool) -> Result<usize> {
