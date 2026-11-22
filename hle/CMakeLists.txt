@@ -50,6 +50,7 @@ add_library(rc_hle STATIC
     msvcrt/format.c
     msvcrt/stdio.c
     msvcrt/eh.c
+    msvcrt/string.c
 )
 target_include_directories(rc_hle PUBLIC include PRIVATE . "${PROJECT_SOURCE_DIR}/third_party/pl_mpeg")
 target_link_libraries(rc_hle PUBLIC rc_runtime rc_platform)

@@ -54,5 +54,6 @@ extern const uint32_t rc_msvcp60_count;
 void rc_msvcrt_init(void);
 void rc_msvcrt_stdio_init(void);
 void rc_msvcrt_eh_init(void);
+void rc_msvcp60_string_init(void);
 
 #endif

@@ -740,4 +740,5 @@ void rc_msvcrt_init(void)
     rc_msvcrt_stdio_init();
     rc_msvcrt_eh_init();
     rc_register_imports(rc_msvcp60_defs, rc_msvcp60_count);
+    rc_msvcp60_string_init();
 }
