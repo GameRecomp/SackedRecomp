@@ -2,6 +2,8 @@
 /* No fonts without SDL3_ttf: text is not drawn. */
 #include "rc/text.h"
 
+#include <stdlib.h>
+
 rc_font *rc_font_get(const char *face, int height, int weight, bool italic)
 {
     (void)face;
@@ -11,9 +13,10 @@ rc_font *rc_font_get(const char *face, int height, int weight, bool italic)
     return 0;
 }
 
-bool rc_font_add_file(const char *path)
+bool rc_font_add_memory(void *data, size_t size)
 {
-    (void)path;
+    free(data);
+    (void)size;
     return false;
 }
 

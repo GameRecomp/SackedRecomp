@@ -12,6 +12,7 @@
 #define RC_TEXT_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -25,9 +26,9 @@ typedef struct rc_font rc_font;
  * normal, 700 bold. NULL if no font file is found. */
 rc_font *rc_font_get(const char *face, int height, int weight, bool italic);
 
-/* A program's own font file (AddFontResource): later rc_font_get calls for its family name use
- * it. False if it cannot be read. */
-bool rc_font_add_file(const char *path);
+/* A program's own font file (AddFontResource), its bytes (kept; the caller hands them over):
+ * later rc_font_get calls for its family name use it. False if it is no font. */
+bool rc_font_add_memory(void *data, size_t size);
 
 typedef struct rc_font_metrics {
     int ascent, descent, height, internal_leading;

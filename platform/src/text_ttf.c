@@ -94,7 +94,8 @@ static TTF_Font *open_file(const family *fam, int style, float size)
 #define PRIVATE_FONTS 8
 static struct {
     char family[64];
-    char path[512];
+    void *data; /* the file's bytes (a browser has no paths SDL could open) */
+    size_t size;
 } private_fonts[PRIVATE_FONTS];
 static int nprivate;
 
@@ -110,31 +111,37 @@ static bool ttf_ready(void)
     return true;
 }
 
-bool rc_font_add_file(const char *path)
+/* A font of the program's own, at `size` (NULL if `face` is none of them). */
+static TTF_Font *open_private(const char *face, float size)
+{
+    for (int i = 0; i < nprivate; i++) {
+        if (SDL_strcasecmp(private_fonts[i].family, face) == 0) {
+            SDL_IOStream *io = SDL_IOFromConstMem(private_fonts[i].data, private_fonts[i].size);
+            return io ? TTF_OpenFontIO(io, true, size) : NULL;
+        }
+    }
+    return NULL;
+}
+
+bool rc_font_add_memory(void *data, size_t size)
 {
     if (!ttf_ready() || nprivate == PRIVATE_FONTS) {
+        free(data);
         return false;
     }
-    TTF_Font *t = TTF_OpenFont(path, 12.0f);
+    SDL_IOStream *io = SDL_IOFromConstMem(data, size);
+    TTF_Font *t = io ? TTF_OpenFontIO(io, true, 12.0f) : NULL;
     if (!t) {
+        free(data);
         return false;
     }
     const char *name = TTF_GetFontFamilyName(t);
     snprintf(private_fonts[nprivate].family, sizeof private_fonts[nprivate].family, "%s", name ? name : "");
-    snprintf(private_fonts[nprivate].path, sizeof private_fonts[nprivate].path, "%s", path);
+    private_fonts[nprivate].data = data;
+    private_fonts[nprivate].size = size;
     nprivate++;
     TTF_CloseFont(t);
     return true;
-}
-
-static const char *private_file(const char *face)
-{
-    for (int i = 0; i < nprivate; i++) {
-        if (SDL_strcasecmp(private_fonts[i].family, face) == 0) {
-            return private_fonts[i].path;
-        }
-    }
-    return NULL;
 }
 
 rc_font *rc_font_get(const char *face, int height, int weight, bool italic)
@@ -154,8 +161,7 @@ rc_font *rc_font_get(const char *face, int height, int weight, bool italic)
     const family *fam = family_of(face);
     int style = weight >= 600 ? 1 : italic ? 2 : 0;
     int px = height < 0 ? -height : height > 0 ? height : 16;
-    const char *own = private_file(face);
-    TTF_Font *t = own ? TTF_OpenFont(own, (float)px) : NULL;
+    TTF_Font *t = open_private(face, (float)px);
     if (t && style == 1) {
         TTF_SetFontStyle(t, TTF_STYLE_BOLD);
     }

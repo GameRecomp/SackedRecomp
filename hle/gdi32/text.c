@@ -12,6 +12,7 @@
 #include "objects.h"
 #include "rc/codepage.h"
 #include "rc/hle.h"
+#include "rc/hostfs.h"
 #include "rc/log.h"
 #include "rc/text.h"
 #include "rc/vm.h"
@@ -57,8 +58,12 @@ static void k_AddFontResourceA(rc_cpu *c)
 {
     char rel[512], host[1024];
     const char *path = rc_str(RC_ARG(c, 0));
-    if (!path || !rc_k32_guest_rel(path, rel, sizeof rel) || !rc_k32_find_existing(rel, host, NULL, NULL) ||
-        !rc_font_add_file(host)) {
+    uint32_t size = 0;
+    uint8_t *bytes = NULL;
+    if (path && rc_k32_guest_rel(path, rel, sizeof rel) && rc_k32_find_existing(rel, host, NULL, NULL)) {
+        bytes = rc_host_read(host, &size); /* (in a browser the game's files are read only this way) */
+    }
+    if (!bytes || !rc_font_add_memory(bytes, size)) {
         rc_log("[gdi] AddFontResourceA(\"%s\"): not added", path ? path : "");
         RC_RETURN(c, 0, 1);
     }
