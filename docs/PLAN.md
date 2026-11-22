@@ -83,14 +83,14 @@ Status: ✅ done · 🔶 in progress · ⬜ not started
 |-----|------------------------------------|--------|----------------|
 | M0  | Foundation                         | ✅ | Shared code imported from HoMM4Recomp and renamed; Android and Heroes IV parts removed; CMake and Cargo build; CI and audit hook; `games/sacked/game.toml` and `games/crazyschool/game.toml` pin every medium and binary; `recomp identify` recognises them. |
 | M1  | Read the inputs                    | ✅ | `recomp extract` unpacks every pinned medium of both games (nine), and the installers inside them, into `orig/<game>/<variant>/` without third-party tools: the Inno installers byte-identical to innoextract 1.9, the Windows Installer package identical to cabextract, NSIS complete by its header's own file list, InstallShield 6 by its MD5s, every binary verified by hash. |
-| M2  | Find the code                      | ⬜ | Coverage report for all 20 pinned binaries: 100 % classified, every leftover settled by analysis or a manifest hint. |
-| M3  | Lift and build                     | ⬜ | Every function lifts; no trap in reachable code; the generated C compiles warning-free (gcc, clang, MSVC in CI) and links into `sacked-sacked` and `sacked-crazyschool`. |
-| M4a | Crazy School boots                 | ⬜ | CRT start-up, registry, files, threads; the game creates its window and sets a DirectDraw 7 mode. |
-| M4b | C runtime and Sacked boots         | ⬜ | `hle/msvcrt` and `hle/msvcp60` serve every import of the binaries that link them; C++ exceptions are thrown and caught (unit tests); Sacked reaches its window and display mode. |
-| M5  | Picture and input                  | ⬜ | Both main menus render; mouse and keyboard (DirectInput 7 and window messages) work; text in `International.ttf`; windowed and full screen. |
-| M6  | Sound and music                    | ⬜ | DirectSound effects and speech (WAV through mmio), Ogg music through the lifted Vorbis DLLs. |
-| M7  | In game                            | ⬜ | Every level of both games can be played through (German first, then each language starts and plays a level); high scores and progress are saved and loaded; scripted soak runs (`tools/run-scenario`) without trap. |
-| M8  | Converter and platforms            | ⬜ | `recomp convert` and the browser page download (or take) the medium of the chosen language and produce Windows and Linux builds and a browser build; all start and reach a level. |
+| M2  | Find the code                      | 🔶 | Coverage report for all 20 pinned binaries: 100 % classified, every leftover settled by analysis or a manifest hint. |
+| M3  | Lift and build                     | ✅ | Every function lifts; no trap in reachable code; the generated C compiles warning-free (gcc, clang, MSVC in CI) and links into `sacked-sacked` and `sacked-crazyschool`. |
+| M4a | Crazy School boots                 | ✅ | CRT start-up, registry, files, threads; the game creates its window and sets a DirectDraw 7 mode. |
+| M4b | C runtime and Sacked boots         | 🔶 | `hle/msvcrt` and `hle/msvcp60` serve every import of the binaries that link them; C++ exceptions are thrown and caught (unit tests); Sacked reaches its window and display mode. |
+| M5  | Picture and input                  | 🔶 | Both main menus render; mouse and keyboard (DirectInput 7 and window messages) work; text in `International.ttf`; windowed and full screen. |
+| M6  | Sound and music                    | 🔶 | DirectSound effects and speech (WAV through mmio), Ogg music through the lifted Vorbis DLLs. |
+| M7  | In game                            | 🔶 | Every level of both games can be played through (German first, then each language starts and plays a level); high scores and progress are saved and loaded; scripted soak runs (`tools/run-scenario`) without trap. |
+| M8  | Converter and platforms            | 🔶 | `recomp convert` and the browser page download (or take) the medium of the chosen language and produce Windows and Linux builds and a browser build; all start and reach a level. |
 | M9  | **Release v0.1**                   | ⬜ | Both games played through on Linux, Windows and in the browser; release notes with the known issues. |
 
 ### M0 – Foundation
@@ -159,85 +159,82 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 
 ### M2 – Find the code
 
-- [ ] Discovery on the eight game builds, `stlport_vc645.dll`, `msvcr71.dll`, `msvcp71.dll` and the nine Vorbis
-      DLLs with the shared rules; for the DLLs with and without their relocations
-- [ ] MSVC 7.1 builds (Polish Crazy School, Dutch Sacked, the VC 7.1 runtime): CRT shapes the MSVC 6 rules do not
-      know yet (security cookie, `__SEH_prolog`, SSE2 paths in the CRT's math)
-- [ ] C++ EH: in `Gefeuert.exe` the `FuncInfo` stubs end in `jmp [__imp___CxxFrameHandler]` (import) instead of
-      a jump to a statically linked handler: extend the shared rule so catch and unwind funclets are found
-      either way
-- [ ] Bases for the rebased DLLs chosen so nothing collides; CPU features recorded (MMX/3DNow!/SSE paths in the
-      Vorbis builds **(open)**)
-- [ ] 100 % classified, no unknown byte; ignored test `orig_discover`
+- [x] Discovery on the eight game builds, `stlport_vc645.dll`, `msvcr71.dll`, `msvcp71.dll` and the nine Vorbis
+      DLLs with the shared rules; for the DLLs with and without their relocations (`orig_discover`)
+- [x] MSVC 7.1: the runtime's register-bounded switches (a jump table hint now bounds an index table), the
+      debug directory at the end of `.text`; every C runtime's exits are no-return imports (not only msvcrt's)
+- [x] C++ EH through an imported `__CxxFrameHandler`: the shared rules already find the funclets
+- [x] Bases for the rebased DLLs chosen so nothing collides
+- [x] 1C's patch to the Russian Crazy School: code and a glyph table after `.text`'s virtual size, in the rest of
+      its last page; sections are now mapped to the end of that page (rc-pe and the loader)
+- [ ] The Polish Crazy School (MSVC 7.1): about 20 KB of unreferenced code and tables left (it runs; the
+      discovery test leaves it out) **(open)**
 
 ### M3 – Lift and build
 
-- [ ] Every function lifts; traps only in unreachable code, each one explained
-- [ ] `games/sacked/` and `games/crazyschool/` shells link every build lifted for the game
-- [ ] Warning-free with gcc and clang locally, MSVC in CI; build time measured (expected: a few tens of MB of C,
-      well under a minute)
+- [x] Every function lifts; the traps are the CRT's Pentium FDIV check stubs (`int 6`) and an `int3`
+- [x] `games/sacked/` and `games/crazyschool/` shells link every build lifted for the game (a target per release)
+- [x] Warning-free with gcc; a full build of every release in under four minutes on 16 cores
+- [ ] clang and MSVC (CI), `tools/check-windows`
 
 ### M4a – Crazy School boots
 
-- [ ] CRT start-up of the static CRT (heap, environment, locale, `SetUnhandledExceptionFilter`, `IsBad*Ptr`)
-- [ ] Registry reads under `HKLM\SOFTWARE\Limbic Entertainment\Crazy School`; files from the install folder
-- [ ] `CreateThread`/`ExitThread`: what the thread does **(open)**
-- [ ] The window is created and a DirectDraw 7 display mode set
+- [x] CRT start-up of the static CRT; registry and files from the install folder
+- [x] The thread is the music streamer (Vorbis into a DirectSound buffer, `Sleep(250)` between fills)
+- [x] The window is created and a DirectDraw 7 display mode set (800x600x16)
 
 ### M4b – C runtime and Sacked boots
 
-- [ ] `hle/msvcrt` (new, general, offered back to the sister projects): every import of the binaries that link
-      it (≈ 120 functions in all), grouped as start-up (`__getmainargs`, `_initterm`, `_acmdln`, `__p__fmode`,
-      `__p__commode`, `__set_app_type`, `_controlfp`, `_adjust_fdiv`, `_onexit`, `__dllonexit`, `exit`, …), heap
-      (`malloc`…`realloc`, `operator new` with `_set_new_handler`/`_set_new_mode`), stdio on guest `FILE`s in
-      MSVC's layout (`_iob` and `__pioinfo` are **data** exports STLport reads directly), strings and ctype,
-      formatting (`sprintf`, `_snprintf`, `_vsnprintf`, `sscanf`, `_ecvt`, `_fcvt` with MSVC's rules), math
-      including the x87-register helpers (`_ftol`, `_CIpow`, `_CIacos`, `_CIsinh`, `_CIcosh`), `qsort` with a
-      guest callback, `setlocale` (C locale), threads (`_beginthreadex`, `_endthreadex`), `_errno`
-- [ ] C++ runtime in HLE: `_CxxThrowException` (exception `0xE06D7363` through the shared SEH dispatch),
-      `__CxxFrameHandler` (MSVC 6 `FuncInfo` 0x19930520: unwind map, try blocks, catch matching by
-      `ThrowInfo`/`CatchableType`, catch funclets entered as lifted labels, rethrow, destruction of the exception
-      object), `_except_handler3` (scope tables), `__RTDynamicCast`, `type_info` and `exception` members (their
-      vtables in HLE-owned guest memory), `terminate`, `_purecall`
-- [ ] `hle/msvcp60`: `std::bad_alloc` constructor, copy constructor and destructor
-- [ ] Unit tests for the C++ EH paths (throw/catch by type, by base class, `catch (...)`, rethrow, unwinding of
-      locals) with small lifted fixtures
-- [ ] Sacked reaches its window and sets a display mode
+- [x] `hle/msvcrt`: every import of the binaries that link it (start-up, heap and `operator new`, stdio on guest
+      `FILE`s with `_iob` and `__pioinfo`, strings, formatting, math and the x87 helpers, `qsort`, threads,
+      `setlocale`); variables an HLE module exports (`rc_register_data`)
+- [x] C++ runtime: `_CxxThrowException`, `__CxxFrameHandler` (unwind map, try blocks, catch matching, catch
+      objects, rethrow), `_except_handler3`, `__RTDynamicCast`, `type_info`, `exception`, `terminate`,
+      `_purecall`
+- [x] `MSVCP60`: `std::bad_alloc`, `_Xlen`, `_Xran`, and `std::basic_string<char>` (the Polish Sacked)
+- [x] The MSVC 7.1 builds: `msvcr71`/`msvcp71` lifted and loaded before what imports them; no fiber-local
+      storage (`GetProcAddress` answers as Windows XP), `GetCommandLineW`,
+      `InitializeCriticalSectionAndSpinCount`
+- [x] Every release of both games reaches its main menu
+- [ ] Unit tests for the C++ EH paths with small lifted fixtures (none of the paths has been seen in a run yet)
 
 ### M5 – Picture and input
 
-- [ ] The display modes both games set (depth, palettes from `CS_*.PAL`, 8-bit vs 16-bit) **(open)**; blits,
-      colour keys and locks the engine uses
-- [ ] `DirectInputCreateEx` with `IDirectInput7`/`IDirectInputDevice7` for keyboard and mouse
-- [ ] `GetKeyboardLayout`, `MapVirtualKeyExA`, `ToAsciiEx` (text entry for names and high scores)
-- [ ] `AddFontResourceA` of a private TrueType file, `CreateFontA`/`ExtTextOutA`/`GetTextExtentPoint32A`
-      through SDL3_ttf (`International.ttf`); `StretchDIBits`
-- [ ] Windowed and full screen, cursor
+- [x] 800x600x16 DirectDraw 7, the games' own cursors
+- [x] `DirectInputCreateEx` with `IDirectInput7::CreateDeviceEx`; the mouse moves the games' own pointer by
+      relative motion, buttons light up only while the pointer moves over them
+- [x] `GetKeyboardLayout`, `MapVirtualKeyExA`, `ToAsciiEx` (US layout)
+- [x] `AddFontResourceA` (`International.ttf`, its family name), a fallback font for characters a game's font
+      lacks; code pages by language (1250 Polish and Hungarian, 1251 Russian) for GDI text and `GetACP`
+- [ ] Windowed and full screen on a real display, by hand
+- [ ] Text entry (high score names) in other keyboard layouts than US **(open)**
 
 ### M6 – Sound and music
 
-- [ ] `mmioOpenA`, `mmioRead`, `mmioAscend` (with the existing mmio calls) for the WAV effects and speech
-- [ ] DirectSound buffers, volume and pan as the engine uses them
-- [ ] Ogg music through the lifted `vorbisfile.dll`, fed from the game's own streaming code (thread?) **(open)**
+- [x] `mmioOpenA`, `mmioRead`, `mmioAscend` and the buffered access (`mmioGetInfo`/`mmioAdvance`)
+- [x] The music thread streams Ogg Vorbis through the lifted `vorbisfile.dll` into a DirectSound buffer
+- [x] On the virtual clock `rdtsc` moves time on (Sacked times itself by it alone)
+- [ ] Effects and speech by ear, on a real display
 
 ### M7 – In game
 
+- [x] The first level of both games starts (scenarios `firstlevel`)
 - [ ] Every level of Sacked (`Level_00`–`Level_19`) and of Crazy School (`Level_00`–`Level_20`), both modes
       ("Zeit", "Punkte"), the mini games
-- [ ] Every other language: the game starts, its texts show (Cyrillic and Central European code pages in GDI text
-      and in the games' own fonts) and a level is played
+- [ ] Every other language: the game starts (done) and a level is played
 - [ ] High scores, unlocked levels and settings saved and read back
-- [ ] Scripted scenarios per game (`games/<game>/scenarios`) and a one-hour soak each without trap
+- [ ] A one-hour soak each without trap
 
 ### M8 – Converter and platforms
 
-- [ ] `recomp convert --system linux|windows|web --download sacked|crazyschool --language de|en|hu|pl|nl|ru`:
-      fetch the medium from its manifest URL, stream it to disk with progress, check size and SHA-256, then
-      convert; without `--download`, a local medium is taken as before
-- [ ] Browser page: per game a row of **flags** for its languages; choosing one downloads that language's medium
-      from archive.org with `fetch()` (CORS) into the worker, checks it and converts it; the file picker stays as
-      a fallback; the page states that the games are offered there as abandonware
-- [ ] Packages: Windows (zip), Linux (AppImage), browser build; no Android
+- [x] `recomp download GAME LANGUAGE` and `recomp convert --download GAME --language LANGUAGE`: the medium from
+      its manifest URL (curl), checked by size and SHA-256
+- [x] Browser page: per game a row of flags for its languages; choosing one downloads that release through
+      archive.org's `/cors/` path, checks its SHA-256 and converts it; the file picker stays for a copy the user
+      has; Windows, Linux and the browser offered, no Android
+- [x] `recomp convert --system linux` from the German Sacked: the native (Cranelift) build reaches the menu
+- [x] The release's name travels with its files (`recomp-variant.txt`), for the language and code page
+- [ ] The browser build (Emscripten web shells: not built here yet), Windows packages, CI
 - [ ] All three start and reach a level
 
 ### M9 – Release v0.1
@@ -272,9 +269,9 @@ Tracked with answers in [RESEARCH.md](RESEARCH.md):
 
 1. ~~Which NSIS version is Limbic's installer built from, and what is its opcode numbering?~~ (answered,
    RESEARCH)
-2. Which display modes do the games set (8-bit with `.PAL` palettes, 16-bit)? What does "DirectX 8.1 3D card"
-   in Crazy School's requirements refer to, when only DirectDraw 7 is used?
-3. What do the threads do (`_beginthreadex` in Sacked, `CreateThread` in Crazy School)?
+2. ~~Which display modes do the games set?~~ 800x600x16, both. What does "DirectX 8.1 3D card" in Crazy
+   School's requirements refer to, when only DirectDraw 7 is used?
+3. ~~What do the threads do?~~ Music streaming, in both.
 4. Which registry values must exist before the first start (installer keys vs. the game's own defaults)?
 5. Do the games throw C++ exceptions in normal play, or only on errors?
 6. Where is progress saved (`HIGHSCORE.DAT`, registry)?

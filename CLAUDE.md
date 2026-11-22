@@ -8,14 +8,21 @@ decision log), `docs/RESEARCH.md` and `docs/TARGETS.md`.
 
 ## State (2026-11-22)
 
-M0 and M1 done: the shared code is in, both games' manifests pin every release that is known (Sacked: German
-CD, English, Hungarian, Polish, Dutch, Russian; Crazy School: German CD, Russian, Polish), and `recomp extract`
-unpacks every medium (raw CD images, NSIS, Inno Setup 3.0/4.2, Windows Installer + cabinet). Next: M2 (discover).
+M0, M1, M3 done; M2, M4–M8 well along. Every pinned release of both games (Sacked: German CD, English,
+Hungarian, Polish, Dutch, Russian; Crazy School: German CD, Russian, Polish) is unpacked by `recomp extract`,
+lifted, built and reaches its main menu; the German versions of both games start their first level
+(`tools/run-scenario sacked firstlevel`, `crazyschool firstlevel`). `recomp convert --system linux` makes a
+native build that runs. The converter page offers the languages as flags and downloads the release from
+archive.org (`/cors/`). Next: play levels through, the browser build (Emscripten), Windows, the Polish Crazy
+School's last 20 KB of discovery, C++ EH unit tests (see `docs/PLAN.md`).
 
 ```sh
 CMAKE_PREFIX_PATH=<your SDL3 prefix> cmake --preset dev && cmake --build --preset dev    # unpacks, lifts, builds
 build/dev/games/sacked/sacked-sacked --game-dir orig/sacked/cd-de
 build/dev/games/crazyschool/sacked-crazyschool --game-dir orig/crazyschool/cd-de
+build/dev/games/sacked/sacked-sacked-pl --game-dir orig/sacked/pl     # a target per other release
+tools/run-scenario sacked firstlevel                 # headless, virtual clock, compares calls and a screenshot
+recomp/target/release/recomp download --dest orig sacked ru          # a release from archive.org
 ```
 
 ## Facts that matter
@@ -24,8 +31,12 @@ build/dev/games/crazyschool/sacked-crazyschool --game-dir orig/crazyschool/cd-de
   abandonware; the converter downloads them itself.
 - Executables: MSVC 6 (Polish Crazy School: MSVC 7.1), base `0x400000`, no relocations, `.text` 0.3–0.5 MiB.
   DirectDraw 7, DirectInput 7, DirectSound, GDI text, Ogg Vorbis through shipped DLLs (lifted, rebased).
-- Sacked links the system's `MSVCRT.dll` (and STLport, shipped, lifted): `hle/msvcrt` with the C++ exception
-  runtime is the new piece. Crazy School links its CRT statically.
+- Sacked links the system's `MSVCRT.dll` (and STLport, shipped, lifted): `hle/msvcrt` (with the C++ exception
+  runtime and MSVCP60's `std::string`) replaces it. Crazy School links its CRT statically, but its Vorbis DLLs
+  use MSVCRT too. The Dutch Sacked and the Polish Crazy School are MSVC 7.1 builds (the Dutch one with its own
+  `msvcr71`/`msvcp71`, lifted).
+- Scripted input: the games move their own pointer by DirectInput's relative motion, and buttons react only
+  while the pointer moves over them (see `games/*/scenarios/firstlevel.input`).
 - No Android build, no resolution patches (decision log).
 
 ## Conventions (same as the sister projects)
