@@ -133,7 +133,8 @@ function setFiles(list) {
   // Only an installer that has one keeps its data in a -1.bin beside it; a .bin otherwise is
   // the medium itself (a raw CD image, as the German Sacked's sd-gefeg.bin).
   slice = (needSlice && all.find((f) => /-\d+\.bin$/i.test(f.name))) || null;
-  file = all.find((f) => f !== slice) || null;
+  // A .cue only lists a CD image's tracks; the image (.bin) is read by itself.
+  file = all.find((f) => f !== slice && !/\.cue$/i.test(f.name)) || null;
   const names = [file, slice].filter(Boolean).map((f) => `${f.name} (${mib(f.size)})`);
   let note = names.length ? names.join(' + ') : 'No file chosen';
   if (file && needSlice && !slice) note += ' — choose its .bin file too (both at once)';
