@@ -90,14 +90,57 @@ static TTF_Font *open_file(const family *fam, int style, float size)
     return NULL;
 }
 
-rc_font *rc_font_get(const char *face, int height, int weight, bool italic)
+/* The program's own font files, by family name. */
+#define PRIVATE_FONTS 8
+static struct {
+    char family[64];
+    char path[512];
+} private_fonts[PRIVATE_FONTS];
+static int nprivate;
+
+static bool ttf_ready(void)
 {
     static int ready;
     if (!ready) {
         if (!TTF_Init()) {
-            return NULL;
+            return false;
         }
         ready = 1;
+    }
+    return true;
+}
+
+bool rc_font_add_file(const char *path)
+{
+    if (!ttf_ready() || nprivate == PRIVATE_FONTS) {
+        return false;
+    }
+    TTF_Font *t = TTF_OpenFont(path, 12.0f);
+    if (!t) {
+        return false;
+    }
+    const char *name = TTF_GetFontFamilyName(t);
+    snprintf(private_fonts[nprivate].family, sizeof private_fonts[nprivate].family, "%s", name ? name : "");
+    snprintf(private_fonts[nprivate].path, sizeof private_fonts[nprivate].path, "%s", path);
+    nprivate++;
+    TTF_CloseFont(t);
+    return true;
+}
+
+static const char *private_file(const char *face)
+{
+    for (int i = 0; i < nprivate; i++) {
+        if (SDL_strcasecmp(private_fonts[i].family, face) == 0) {
+            return private_fonts[i].path;
+        }
+    }
+    return NULL;
+}
+
+rc_font *rc_font_get(const char *face, int height, int weight, bool italic)
+{
+    if (!ttf_ready()) {
+        return NULL;
     }
     for (int i = 0; i < nfonts; i++) {
         rc_font *f = &fonts[i];
@@ -111,7 +154,14 @@ rc_font *rc_font_get(const char *face, int height, int weight, bool italic)
     const family *fam = family_of(face);
     int style = weight >= 600 ? 1 : italic ? 2 : 0;
     int px = height < 0 ? -height : height > 0 ? height : 16;
-    TTF_Font *t = open_file(fam, style, (float)px);
+    const char *own = private_file(face);
+    TTF_Font *t = own ? TTF_OpenFont(own, (float)px) : NULL;
+    if (t && style == 1) {
+        TTF_SetFontStyle(t, TTF_STYLE_BOLD);
+    }
+    if (!t) {
+        t = open_file(fam, style, (float)px);
+    }
     if (!t) {
         return NULL;
     }

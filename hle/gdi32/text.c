@@ -14,6 +14,7 @@
 #include "rc/log.h"
 #include "rc/text.h"
 #include "rc/vm.h"
+#include "kernel32/k32.h"
 
 #define G32 "GDI32.dll"
 
@@ -47,6 +48,20 @@ static void k_CreateFontA(rc_cpu *c)
               new_font((int32_t)RC_ARG(c, 0), (int32_t)RC_ARG(c, 1), RC_ARG(c, 4), RC_ARG(c, 5) & 0xff,
                        RC_ARG(c, 6) & 0xff, RC_ARG(c, 8) & 0xff, RC_ARG(c, 12) & 0xff, face),
               14);
+}
+
+/* AddFontResourceA(file): the program's own font, found by its family name from then on;
+ * the number of fonts added. */
+static void k_AddFontResourceA(rc_cpu *c)
+{
+    char rel[512], host[1024];
+    const char *path = rc_str(RC_ARG(c, 0));
+    if (!path || !rc_k32_guest_rel(path, rel, sizeof rel) || !rc_k32_find_existing(rel, host, NULL, NULL) ||
+        !rc_font_add_file(host)) {
+        rc_log("[gdi] AddFontResourceA(\"%s\"): not added", path ? path : "");
+        RC_RETURN(c, 0, 1);
+    }
+    RC_RETURN(c, 1, 1);
 }
 
 /* CreateFontIndirectA(LOGFONTA) */
@@ -101,8 +116,8 @@ static void k_SetTextAlign(rc_cpu *c)
     RC_RETURN(c, old, 2);
 }
 
-/* Fonts are the platform's: none was added, so none is removed. */
-static void k_RemoveFontResourceA(rc_cpu *c) { RC_RETURN(c, 0, 1); }
+/* The program's own fonts stay until the end. */
+static void k_RemoveFontResourceA(rc_cpu *c) { RC_RETURN(c, 1, 1); }
 
 /* ---- text ---- */
 
@@ -424,6 +439,7 @@ static void k_EnumFontFamiliesExA(rc_cpu *c)
 
 const rc_import_def rc_gdi32_text[] = {
     {G32, "CreateFontA", k_CreateFontA},
+    {G32, "AddFontResourceA", k_AddFontResourceA},
     {G32, "CreateFontIndirectA", k_CreateFontIndirectA},
     {G32, "SetTextColor", k_SetTextColor},
     {G32, "SetTextAlign", k_SetTextAlign},

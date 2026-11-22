@@ -11,6 +11,12 @@ rc_font *rc_font_get(const char *face, int height, int weight, bool italic)
     return 0;
 }
 
+bool rc_font_add_file(const char *path)
+{
+    (void)path;
+    return false;
+}
+
 void rc_font_metrics_of(rc_font *f, rc_font_metrics *m)
 {
     (void)f;

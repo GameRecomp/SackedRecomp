@@ -25,6 +25,10 @@ typedef struct rc_font rc_font;
  * normal, 700 bold. NULL if no font file is found. */
 rc_font *rc_font_get(const char *face, int height, int weight, bool italic);
 
+/* A program's own font file (AddFontResource): later rc_font_get calls for its family name use
+ * it. False if it cannot be read. */
+bool rc_font_add_file(const char *path);
+
 typedef struct rc_font_metrics {
     int ascent, descent, height, internal_leading;
     int avg_width, max_width;
