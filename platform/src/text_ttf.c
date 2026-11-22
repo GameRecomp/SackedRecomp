@@ -159,6 +159,14 @@ rc_font *rc_font_get(const char *face, int height, int weight, bool italic)
     if (t && style == 1) {
         TTF_SetFontStyle(t, TTF_STYLE_BOLD);
     }
+    if (t) {
+        /* Characters the program's font lacks (Polish letters in a Western font) come from the
+         * sans serif, as Windows' font mapper would pick another font for them. */
+        TTF_Font *fallback = open_file(family_of("arial"), style, (float)px);
+        if (fallback) {
+            TTF_AddFallbackFont(t, fallback);
+        }
+    }
     if (!t) {
         t = open_file(fam, style, (float)px);
     }

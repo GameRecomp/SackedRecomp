@@ -11,6 +11,7 @@
  * program's directory and the directories above them (as TropicoRecomp does), so a build runs
  * from any build directory and from a debugger.
  */
+#include "rc/codepage.h"
 #include "rc/game.h"
 
 #include "rc/hle.h"
@@ -274,7 +275,9 @@ static const char *install_language(const char *game_dir, const char *variant)
     static const struct {
         const char *gog, *code, *own;
     } langs[] = {{"English", "en", "English"}, {"German", "de", "Deutsch"},  {"Spanish", "es", "Espa\xc3\xb1ol"},
-                 {"French", "fr", "Fran\xc3\xa7" "ais"}, {"Italian", "it", "Italiano"}, {"Polish", "pl", "Polski"}};
+                 {"French", "fr", "Fran\xc3\xa7" "ais"}, {"Italian", "it", "Italiano"}, {"Polish", "pl", "Polski"},
+                 {"Dutch", "nl", "Nederlands"}, {"Hungarian", "hu", "Magyar"},
+                 {"Russian", "ru", "\xd0\xa0\xd1\x83\xd1\x81\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9"}};
     info_find f = {{0}};
     rc_host_list(game_dir, find_info, &f);
     char path[RC_PATH_MAX];
@@ -296,9 +299,11 @@ static const char *install_language(const char *game_dir, const char *variant)
         }
         free(text);
     }
+    /* "gog-de", "cd-de", or just "pl" */
     const char *dash = variant ? strrchr(variant, '-') : NULL;
-    for (size_t i = 0; dash && i < sizeof langs / sizeof langs[0]; i++) {
-        if (!strcmp(dash + 1, langs[i].code)) {
+    const char *code = dash ? dash + 1 : variant;
+    for (size_t i = 0; code && i < sizeof langs / sizeof langs[0]; i++) {
+        if (!strcmp(code, langs[i].code)) {
             return langs[i].own;
         }
     }
@@ -489,6 +494,7 @@ int rc_game_main(const rc_game_info *game, const rc_generated_set *generated, in
         }
         const char *lang = install_language(game_dir, NULL);
         game_language = lang;
+        rc_set_game_codepage(rc_codepage_of_language(lang));
         snprintf(title_suffix, sizeof title_suffix, lang ? " %s (%s, %s)" : " %s (%s)", RC_VERSION, RC_GIT_HASH,
                  lang ? lang : "");
         rc_log("native code %s (%s)", native, rc_native_target());
@@ -514,6 +520,8 @@ int rc_game_main(const rc_game_info *game, const rc_generated_set *generated, in
         if (strcmp(h, exe_hash) == 0) {
             const char *lang = install_language(game_dir, b->variant);
             game_language = lang;
+        rc_set_game_codepage(rc_codepage_of_language(lang));
+            rc_set_game_codepage(rc_codepage_of_language(lang));
             snprintf(title_suffix, sizeof title_suffix, lang ? " %s (%s, %s)" : " %s (%s)", RC_VERSION, RC_GIT_HASH,
                      lang ? lang : "");
         }

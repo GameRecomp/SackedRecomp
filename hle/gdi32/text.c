@@ -10,6 +10,7 @@
 #include "dc.h"
 #include "gdi32.h"
 #include "objects.h"
+#include "rc/codepage.h"
 #include "rc/hle.h"
 #include "rc/log.h"
 #include "rc/text.h"
@@ -121,17 +122,27 @@ static void k_RemoveFontResourceA(rc_cpu *c) { RC_RETURN(c, 1, 1); }
 
 /* ---- text ---- */
 
-/* Code page 1252 to UTF-8. */
+/* The code page of the current text: the font's character set (238 Central European, 204
+ * Cyrillic), else the install's ANSI code page. */
+static uint32_t text_codepage = 1252;
+
+static uint32_t codepage_of_charset(uint32_t charset)
+{
+    switch (charset) {
+    case 238: return 1250;
+    case 204: return 1251;
+    case 0:
+    case 1: return rc_game_codepage();
+    default: return 1252;
+    }
+}
+
+/* ANSI text to UTF-8, in text_codepage. */
 static void to_utf8(const uint8_t *s, uint32_t n, char *out, size_t cap)
 {
-    static const uint16_t high[32] = {
-        0x20ac, 0x0081, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160,
-        0x2039, 0x0152, 0x008d, 0x017d, 0x008f, 0x0090, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022,
-        0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x009d, 0x017e, 0x0178,
-    };
     size_t o = 0;
     for (uint32_t i = 0; i < n && o + 4 < cap; i++) {
-        uint32_t cp = s[i] >= 0x80 && s[i] < 0xa0 ? high[s[i] - 0x80] : s[i];
+        uint32_t cp = rc_codepage_unicode(text_codepage, s[i]);
         if (cp < 0x80) {
             out[o++] = (char)cp;
         } else if (cp < 0x800) {
@@ -144,6 +155,13 @@ static void to_utf8(const uint8_t *s, uint32_t n, char *out, size_t cap)
         }
     }
     out[o] = 0;
+}
+
+/* The code page for text drawn with the DC's font. */
+static void use_codepage(const rc_dc *d)
+{
+    gobj *f = d ? rc_gobj_get(d->font ? d->font : rc_gdi_stock(13), OB_FONT) : NULL;
+    text_codepage = codepage_of_charset(f ? f->charset : 1);
 }
 
 static uint32_t to_unicode(uint8_t ch)
@@ -177,6 +195,7 @@ static void plot(void *ctx, int x, int y)
 int rc_gdi_text(rc_dc *d, int32_t x, int32_t y, const char *s, uint32_t n)
 {
     char text[2048];
+    use_codepage(d);
     to_utf8((const uint8_t *)s, n, text, sizeof text);
     rc_font *f = font_of(d);
     if (!f || !d->target.pixels) {
@@ -189,6 +208,7 @@ int rc_gdi_text(rc_dc *d, int32_t x, int32_t y, const char *s, uint32_t n)
 void rc_gdi_text_size(rc_dc *d, const char *s, uint32_t n, int *w, int *h)
 {
     char text[2048];
+    use_codepage(d);
     to_utf8((const uint8_t *)s, n, text, sizeof text);
     rc_font *f = font_of(d);
     *w = 0;

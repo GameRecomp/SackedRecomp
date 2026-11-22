@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "k32.h"
+#include "rc/codepage.h"
 
 #define LOCALE_EN_US 0x0409u
 
@@ -72,7 +73,7 @@ static uint16_t ctype1(uint16_t c)
     return f;
 }
 
-static void k_GetACP(rc_cpu *c) { RC_RETURN(c, 1252, 0); }
+static void k_GetACP(rc_cpu *c) { RC_RETURN(c, rc_game_codepage(), 0); }
 static void k_GetOEMCP(rc_cpu *c) { RC_RETURN(c, 437, 0); }
 static void k_IsValidCodePage(rc_cpu *c)
 {

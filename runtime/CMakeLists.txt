@@ -19,6 +19,7 @@ add_library(rc_runtime STATIC
     src/native.c
     src/web.c
     src/fault.c
+    src/codepage.c
 )
 target_include_directories(rc_runtime PUBLIC include)
 
