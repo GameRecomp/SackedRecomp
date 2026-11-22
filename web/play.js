@@ -9,9 +9,9 @@
 //   the shell before main starts.
 // - What the game writes (saved games, its settings) goes to /user-<game>,
 //   kept in IndexedDB and saved a moment after every change.
-// - The player's own settings (scale, sharp pixels) are kept in localStorage.
-//   The canvas holds the game's frame at its own size; the page scales it:
-//   as large as fits, or by a whole number of device pixels.
+// - The player's own setting (sharp pixels) is kept in localStorage. The
+//   canvas holds the game's frame at its own size (the games' own 800x600:
+//   no other resolutions here); the page scales it as large as fits.
 
 // The game is the page's ?game= (sacked); each has its own web
 // shell (player/sacked.js), loaded when the game
@@ -102,33 +102,21 @@ async function findGame() {
 let game = null;
 let module = null;
 
-/* Size the canvas on the page: `scale` 0 is as large as fits, keeping the
- * frame's aspect; 1 to 4 that many device pixels per game pixel (smaller
- * if the window is too small). */
+/* Size the canvas on the page: as large as fits, keeping the frame's aspect. */
 // Not before SDL has sized the canvas: SDL adopts a size the page gave it
 // when it creates its window (it probes with 1x1 first).
 let sized = false;
 
-function layout(scale) {
+function layout() {
   const c = $('canvas');
   if (!sized) {
     if (c.width <= 1 || !module) return;
     sized = true;
   }
   const w = c.width || 640, h = c.height || 480;
-  const dpr = window.devicePixelRatio || 1;
   const vw = window.innerWidth, vh = window.innerHeight;
-  let cssW, cssH;
-  if (scale > 0) {
-    let s = scale;
-    while (s > 1 && ((w * s) / dpr > vw || (h * s) / dpr > vh)) s--;
-    cssW = (w * s) / dpr;
-    cssH = (h * s) / dpr;
-  } else {
-    const f = Math.min(vw / w, vh / h);
-    cssW = w * f;
-    cssH = h * f;
-  }
+  const f = Math.min(vw / w, vh / h);
+  const cssW = w * f, cssH = h * f;
   const pw = `${Math.floor(cssW)}px`, ph = `${Math.floor(cssH)}px`;
   if (c.style.width !== pw || c.style.getPropertyPriority('width') !== 'important') c.style.setProperty('width', pw, 'important');
   if (c.style.height !== ph || c.style.getPropertyPriority('height') !== 'important') c.style.setProperty('height', ph, 'important');
@@ -193,7 +181,7 @@ async function start() {
         m.ENV.RC_DATA = '/';
         m.ENV.RC_FONT_DIR = '/fonts';
         // ?trace=imports,files (as RC_TRACE) logs to the console.
-        if (prefs.resolution) m.ENV.RC_RESOLUTION = prefs.resolution;
+        m.ENV.RC_RESOLUTION = 'off'; /* the games' own resolution only */
         const trace = new URLSearchParams(location.search).get('trace');
         if (trace) m.ENV.RC_TRACE = trace;
       }],
@@ -249,8 +237,6 @@ function updateCode() {
 }
 
 const prefs = loadPrefs();
-// (An older page saved the window's size as "window": now the default, Window x1.)
-if (prefs.resolution === 'window') prefs.resolution = '';
 document.title = `${GAME.name} Player`;
 $('title').textContent = GAME.full || GAME.name;
 $('convert').href = `./?game=${GAME.id}`;
@@ -265,24 +251,10 @@ async function main() {
     document.body.classList.toggle('sharp', prefs.sharp);
     savePrefs(prefs);
   });
-  $('resolution').value = prefs.resolution || '';
-  $('resolution').addEventListener('change', () => {
-    prefs.resolution = $('resolution').value;
-    savePrefs(prefs);
-    if (module) $('saved').textContent = 'The resolution takes effect when the game is started again.';
-  });
-  const scale = () => Number(prefs.scale) || 0;
-  $('scale').value = String(scale());
-  $('scale').addEventListener('change', () => {
-    prefs.scale = Number($('scale').value);
-    savePrefs(prefs);
-    layout(scale());
-    $('canvas').focus();
-  });
   // The canvas changes size with the game's resolution, the page with the
   // window.
-  new MutationObserver(() => layout(scale())).observe($('canvas'), { attributes: true, attributeFilter: ['width', 'height', 'style'] });
-  window.addEventListener('resize', () => layout(scale()));
+  new MutationObserver(() => layout()).observe($('canvas'), { attributes: true, attributeFilter: ['width', 'height', 'style'] });
+  window.addEventListener('resize', () => layout());
   $('fullscreen').addEventListener('click', () => {
     document.documentElement.requestFullscreen?.().catch(() => {});
     $('canvas').focus();
