@@ -21,6 +21,7 @@ static const struct {
 } builds[] = {
     {"cd-de", 0x0047e30c}, /* Gefeuert.exe */
     {"en", 0x0047e36c},    /* sacked.exe, English and Hungarian */
+    {"hu", 0x0047e36c},    /* (the release's name where the converter's code runs) */
     {"pl", 0x0047bf0c},
     {"nl", 0x00478e0c},    /* Ontslagen.exe */
     {"ru", 0x0047e36c},

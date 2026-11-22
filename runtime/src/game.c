@@ -272,6 +272,25 @@ static void find_info(void *ctx, const char *name, bool is_dir, uint64_t size)
 
 static const char *game_variant;
 
+/* The release, as recomp-variant.txt beside the game's files names it (written by the converter
+ * and by recomp extract), or NULL. */
+static const char *variant_file(const char *game_dir)
+{
+    static char named[32];
+    char path[RC_PATH_MAX];
+    if (!rc_host_resolve(game_dir, "recomp-variant.txt", false, path) || !rc_host_exists(path, NULL, NULL)) {
+        return NULL;
+    }
+    uint32_t n = 0;
+    uint8_t *v = rc_host_read(path, &n);
+    if (!v) {
+        return NULL;
+    }
+    snprintf(named, sizeof named, "%.*s", (int)(n < sizeof named - 1 ? n : sizeof named - 1), (const char *)v);
+    free(v);
+    return named;
+}
+
 const char *rc_game_variant(void) { return game_variant; }
 
 static const char *install_language(const char *game_dir, const char *variant)
@@ -303,17 +322,11 @@ static const char *install_language(const char *game_dir, const char *variant)
         }
         free(text);
     }
-    /* "gog-de", "cd-de", or just "pl"; recomp-variant.txt (written by the converter and by recomp
-     * extract) names the release more exactly than its executable, which several share. */
-    char named[32] = "";
-    if (rc_host_resolve(game_dir, "recomp-variant.txt", false, path) && rc_host_exists(path, NULL, NULL)) {
-        uint32_t n = 0;
-        uint8_t *v = rc_host_read(path, &n);
-        if (v) {
-            snprintf(named, sizeof named, "%.*s", (int)(n < sizeof named - 1 ? n : sizeof named - 1), (const char *)v);
-            free(v);
-            variant = named;
-        }
+    /* "gog-de", "cd-de", or just "pl"; recomp-variant.txt names the release more exactly than its
+     * executable, which several share. */
+    const char *named = variant_file(game_dir);
+    if (named) {
+        variant = named;
     }
     const char *dash = variant ? strrchr(variant, '-') : NULL;
     const char *code = dash ? dash + 1 : variant;
@@ -509,6 +522,7 @@ int rc_game_main(const rc_game_info *game, const rc_generated_set *generated, in
         }
         const char *lang = install_language(game_dir, NULL);
         game_language = lang;
+        game_variant = variant_file(game_dir); /* (code from the converter, which names its release) */
         rc_set_game_codepage(rc_codepage_of_language(lang));
         snprintf(title_suffix, sizeof title_suffix, lang ? " %s (%s, %s)" : " %s (%s)", RC_VERSION, RC_GIT_HASH,
                  lang ? lang : "");
