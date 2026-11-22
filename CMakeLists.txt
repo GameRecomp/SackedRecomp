@@ -2,6 +2,8 @@
 cmake_minimum_required(VERSION 3.25)
 
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" RC_VERSION)
+# A changed VERSION configures again (the shells print it).
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 string(STRIP "${RC_VERSION}" RC_VERSION)
 project(sackedrecomp VERSION ${RC_VERSION} LANGUAGES C)
 

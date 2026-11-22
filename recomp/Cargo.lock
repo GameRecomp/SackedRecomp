@@ -551,7 +551,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rc-cli"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "rc-convert",
  "rc-discover",
@@ -568,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "rc-convert"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "crc32fast",
  "miniz_oxide 0.8.9",
@@ -586,7 +586,7 @@ dependencies = [
 
 [[package]]
 name = "rc-difftest"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "iced-x86",
  "rc-discover",
@@ -600,7 +600,7 @@ dependencies = [
 
 [[package]]
 name = "rc-discover"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "iced-x86",
  "rc-pe",
@@ -609,14 +609,14 @@ dependencies = [
 
 [[package]]
 name = "rc-emit-c"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "rc-ir",
 ]
 
 [[package]]
 name = "rc-emit-native"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "rc-emit-wasm"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "rc-ir",
  "wasm-encoder",
@@ -634,11 +634,11 @@ dependencies = [
 
 [[package]]
 name = "rc-ir"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "rc-manifest"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "serde",
  "sha2",
@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "rc-media"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "crc32fast",
  "flate2",
@@ -658,11 +658,11 @@ dependencies = [
 
 [[package]]
 name = "rc-pe"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "rc-web"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "js-sys",
  "rc-convert",
@@ -671,7 +671,7 @@ dependencies = [
 
 [[package]]
 name = "rc-x86"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "iced-x86",
  "rc-discover",
