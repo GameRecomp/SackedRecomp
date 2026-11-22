@@ -72,6 +72,21 @@ static void k_GetVersionExA(rc_cpu *c)
 
 static void k_GetCommandLineA(rc_cpu *c) { RC_RETURN(c, rc_proc.cmdline, 0); }
 
+/* The command line in UTF-16 (made once; it is ASCII or code page 1252). */
+static void k_GetCommandLineW(rc_cpu *c)
+{
+    static uint32_t wide;
+    if (!wide) {
+        const char *s = rc_str(rc_proc.cmdline);
+        uint32_t n = (uint32_t)strlen(s);
+        wide = rc_heap_alloc(2 * (n + 1), true);
+        for (uint32_t i = 0; i < n; i++) {
+            rc_st16(wide + 2 * i, (uint8_t)s[i]);
+        }
+    }
+    RC_RETURN(c, wide, 0);
+}
+
 static void k_GetStartupInfoA(rc_cpu *c)
 {
     uint32_t p = RC_ARG(c, 0);
@@ -115,6 +130,14 @@ static void k_LoadLibraryA(rc_cpu *c)
 
 static void k_FreeLibrary(rc_cpu *c) { RC_RETURN(c, 1, 1); }
 
+/* Functions Windows XP does not have: programs that ask for them (the Visual C++ 7.1 runtime
+ * asks for the fiber-local storage calls) find them missing and take the older way. */
+static const char *const not_on_xp[] = {
+    "FlsAlloc", "FlsFree", "FlsGetValue", "FlsSetValue", "InitializeCriticalSectionEx",
+    "InitOnceExecuteOnce", "CreateEventExW", "CreateSemaphoreExW", "GetTickCount64",
+    "GetSystemTimePreciseAsFileTime", "SetThreadStackGuarantee",
+};
+
 static void k_GetProcAddress(rc_cpu *c)
 {
     uint32_t h = RC_ARG(c, 0), name = RC_ARG(c, 1);
@@ -137,6 +160,12 @@ static void k_GetProcAddress(rc_cpu *c)
     if (dll == NULL || name < 0x10000) {
         rc_last_error = 127; /* ERROR_PROC_NOT_FOUND */
         RC_RETURN(c, 0, 2);
+    }
+    for (size_t i = 0; i < sizeof not_on_xp / sizeof not_on_xp[0]; i++) {
+        if (!strcmp(rc_str(name), not_on_xp[i])) {
+            rc_last_error = 127;
+            RC_RETURN(c, 0, 2);
+        }
     }
     /* The name must outlive the guest string. */
     const char *n = rc_str(rc_proc_str(rc_str(name)));
@@ -954,6 +983,7 @@ const rc_import_def rc_k32_process[] = {
     {K32, "InterlockedExchange", k_InterlockedExchange},
     {K32, "GetVersionExA", k_GetVersionExA},
     {K32, "GetCommandLineA", k_GetCommandLineA},
+    {K32, "GetCommandLineW", k_GetCommandLineW},
     {K32, "GetStartupInfoA", k_GetStartupInfoA},
     {K32, "GetModuleHandleA", k_GetModuleHandleA},
     {K32, "LoadLibraryA", k_LoadLibraryA},
