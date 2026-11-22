@@ -438,8 +438,8 @@ bool rc_ddraw_has_primary(void) { return display.primary != 0; }
  * the wait for the display), resting for the frame limit, and the rest (the program's own work,
  * other threads, sound). */
 static struct {
-    uint64_t since, convert, show, rest;
-    unsigned presented, drawn;
+    uint64_t since, since_ms, convert, show, rest;
+    unsigned presented, drawn, changed;
 } fps_stat;
 
 static void fps_tick(void)
@@ -451,21 +451,26 @@ static void fps_tick(void)
     if (!on) {
         return;
     }
-    uint64_t now = rc_host_us();
+    /* Once a second of the program's clock (the virtual one too); the host's time in it. */
+    uint64_t now = rc_host_us(), now_ms = rc_ticks_peek_ms();
     if (!fps_stat.since) {
         fps_stat.since = now;
+        fps_stat.since_ms = now_ms;
+        return;
+    }
+    if (now_ms - fps_stat.since_ms < 1000u) {
         return;
     }
     uint64_t span = now - fps_stat.since;
-    if (span < 1000000u) {
-        return;
-    }
     uint64_t busy = span - fps_stat.convert - fps_stat.show - fps_stat.rest;
-    rc_log("fps: %u presented, %u drawn in %.2f s; ms: convert %.0f, show %.0f, frame limit %.0f, program %.0f",
-           fps_stat.presented, fps_stat.drawn, (double)span / 1e6, (double)fps_stat.convert / 1e3,
-           (double)fps_stat.show / 1e3, (double)fps_stat.rest / 1e3, (double)busy / 1e3);
+    rc_log("fps: %u presented, %u changed, %u drawn in %.2f s (host %.2f s); ms: convert %.0f, show %.0f, "
+           "frame limit %.0f, program %.0f",
+           fps_stat.presented, fps_stat.changed, fps_stat.drawn, (double)(now_ms - fps_stat.since_ms) / 1e3,
+           (double)span / 1e6, (double)fps_stat.convert / 1e3, (double)fps_stat.show / 1e3,
+           (double)fps_stat.rest / 1e3, (double)busy / 1e3);
     memset(&fps_stat, 0, sizeof fps_stat);
     fps_stat.since = now;
+    fps_stat.since_ms = now_ms;
 }
 
 /* The primary surface onto the window. */
@@ -477,9 +482,11 @@ static void draw(void)
         return;
     }
     uint64_t now = rc_ticks_peek_ms();
-    if (same_as_shown(s, p) && now - shown_at < SAME_FRAME_MS) {
+    int same = same_as_shown(s, p);
+    if (same && now - shown_at < SAME_FRAME_MS) {
         return;
     }
+    fps_stat.changed += !same;
     uint64_t t0 = rc_host_us();
     if (s->bpp == 16) {
         make_rgb16(s);
@@ -538,6 +545,25 @@ static void present(void);
  * as a frame of its own. */
 #define IDLE_FRAME_MS 50
 
+/* Wait until the next frame is due (settings: fps), and count it from then. Not on the virtual
+ * clock, whose runs are to repeat exactly (it moves on at each frame by itself: rc_clock_frame). */
+static bool flipped; /* the frame came by Flip, which waited already */
+static void pace(void)
+{
+    int max_fps = rc_plat_display_get().max_fps;
+    if (max_fps <= 0 || rc_clock_virtual()) {
+        return;
+    }
+    static uint64_t paced_at;
+    uint64_t due = paced_at + 1000u / (uint32_t)max_fps, now = rc_ticks_peek_ms();
+    if (now < due && due - now <= 1000u) {
+        uint64_t t0 = rc_host_us();
+        rc_thread_sleep((uint32_t)(due - now));
+        fps_stat.rest += rc_host_us() - t0;
+    }
+    paced_at = rc_ticks_peek_ms();
+}
+
 static void flush(rc_cpu *c)
 {
     (void)c;
@@ -549,19 +575,12 @@ static void flush(rc_cpu *c)
     }
     /* The pace goes by the passes, not by what is drawn: a pass whose picture has not changed
      * draws nothing (same_as_shown), and pacing by the last picture drawn would let such passes
-     * run unchecked: Sacked then makes over 200 passes a second, each moving its figures by a
-     * few milliseconds, and its picture changes only some ten times a second. */
-    int max_fps = rc_plat_display_get().max_fps;
-    if (max_fps > 0 && !rc_clock_virtual()) {
-        static uint64_t paced_at;
-        uint64_t due = paced_at + 1000u / (uint32_t)max_fps, now = rc_ticks_peek_ms();
-        if (now < due && due - now <= 1000u) {
-            uint64_t t0 = rc_host_us();
-            rc_thread_sleep((uint32_t)(due - now));
-            fps_stat.rest += rc_host_us() - t0;
-        }
-        paced_at = rc_ticks_peek_ms();
+     * run unchecked. A program that copies its picture to the screen piece by piece waits here,
+     * once its pass is done; one that flips waited in Flip. */
+    if (!flipped) {
+        pace();
     }
+    flipped = false;
     pending = 0;
     draw();
 }
@@ -817,6 +836,12 @@ static void k_Flip(rc_cpu *c)
         b->pixels = t;
     }
     if ((uint32_t)(x - objects) == display.primary) {
+        /* The wait for the next frame is in Flip, as on Windows, where Flip waits for the
+         * display: a game that times its passes (Sacked, from one Flip to the next by its own
+         * stopwatch) must see that time in them. Waiting later, when it looks for messages, it
+         * sees only its own work (some 5 of the 16 ms) and moves its world a third as fast. */
+        pace();
+        flipped = true;
         present();
     }
     RC_RETURN(c, DD_OK, 3);
