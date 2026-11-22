@@ -71,6 +71,17 @@ Whether the localised game builds differ in code beyond their texts is **(open)*
 - Crazy School's first level in time mode, nothing pranked: still running at frame 30000 (clock 07:47). Whether
   the level has a time limit, or ends only through what the player does, is **(open)**.
 
+## Frame rate and the mouse
+
+- In a quiet level Sacked flips about 200 times a second when nothing holds it back, and its picture changes
+  only when something on it moves (some ten times a second with nobody walking; every frame while the pointer
+  moves). Its clock runs by `GetTickCount`, the same at 60 and at 240 passes a second.
+- Both games create the DirectInput mouse with `DISCL_FOREGROUND | DISCL_NONEXCLUSIVE` and read it with
+  `GetDeviceState` (accumulated motion); only the keyboard is buffered (32 events).
+- The `crazyschool firstlevel` scenario passes with its accepted screenshot, but its call sequence now has three
+  more `GetTickCount` early in the run than the accepted one, already before the frame-pacing and mouse
+  changes; the cause is **(open)**.
+
 ## The browser download
 
 - Both files are served by archive.org through a redirect (`archive.org/download/<item>/<file>` → a mirror

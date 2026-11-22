@@ -206,6 +206,10 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 - [x] 800x600x16 DirectDraw 7, the games' own cursors
 - [x] `DirectInputCreateEx` with `IDirectInput7::CreateDeviceEx`; the mouse moves the games' own pointer by
       relative motion, buttons light up only while the pointer moves over them
+- [x] The window catches the mouse (SDL's relative mode) while a game reads it through DirectInput; the motion
+      is the host mouse's own (raw, unscaled), so it goes on at the window's edge
+- [x] The frame limit (`fps` in `settings.ini`) paces the game's passes: a quiet level ran over 200 passes a
+      second; on a real display the level now runs at 60 (`RC_TRACE=fps`)
 - [x] `GetKeyboardLayout`, `MapVirtualKeyExA`, `ToAsciiEx` (US layout)
 - [x] `AddFontResourceA` (`International.ttf`, its family name), a fallback font for characters a game's font
       lacks; code pages by language (1250 Polish and Hungarian, 1251 Russian) for GDI text and `GetACP`
@@ -240,6 +244,8 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
       has; Windows, Linux and the browser offered, no Android
 - [x] `recomp convert --system linux` from the German Sacked: the native (Cranelift) build reaches the menu
 - [x] The release's name travels with its files (`recomp-variant.txt`), for the language and code page
+- [x] The browser: `ExitThread` unwinds a guest thread to its start (both games end their music thread when a
+      level starts); the converter page takes a raw CD image (`.bin`) as the medium
 - [x] The browser: the web shells build (Emscripten 7.0.0); in Firefox the page converts the German Sacked in
       9 seconds (6802 functions as WebAssembly, the files into the browser's storage), the German Crazy School
       in 8 seconds (2615 functions), and the player runs both to their main menus
