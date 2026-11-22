@@ -5,6 +5,7 @@
 
 mod convert;
 mod discover;
+mod download;
 mod lift;
 mod media;
 mod native;
@@ -60,6 +61,14 @@ USAGE:
                                             android; from DIR, by default templates/ beside
                                             recomp), with the game's files: <Game>-SYSTEM.zip
                                             (.apk for android) in the current folder
+    recomp download [--games DIR] [--dest DIR] GAME LANGUAGE
+                                            download the game's medium in that language
+                                            (sacked: de, en, hu, pl, nl, ru; crazyschool: de,
+                                            ru, pl) from archive.org into DIR (default: the
+                                            current folder), checked by its SHA-256
+    recomp convert --download GAME --language LANGUAGE [--dest DIR] ...
+                                            the same, then convert it (with --system: the
+                                            converter's way, else the build's)
     recomp help | --help
     recomp version | --version
 
@@ -95,6 +104,8 @@ struct Opts {
     shell: Option<PathBuf>,
     template: Option<PathBuf>,
     templates: Option<PathBuf>,
+    download: Option<String>,
+    language: Option<String>,
     paths: Vec<PathBuf>,
 }
 
@@ -126,6 +137,8 @@ fn parse_opts(args: &[String]) -> Result<Opts, String> {
         shell: None,
         template: None,
         templates: None,
+        download: None,
+        language: None,
         paths: Vec::new(),
     };
     let mut it = args.iter();
@@ -150,6 +163,8 @@ fn parse_opts(args: &[String]) -> Result<Opts, String> {
                 o.templates = Some(it.next().ok_or("--templates needs a folder")?.into())
             }
             "--template" => o.template = Some(it.next().ok_or("--template needs a file")?.into()),
+            "--download" => o.download = Some(it.next().ok_or("--download needs a game id")?.clone()),
+            "--language" => o.language = Some(it.next().ok_or("--language needs a language")?.clone()),
             "--native" => {
                 let t = it
                     .next()
@@ -245,8 +260,28 @@ fn run(args: &[String]) -> Result<ExitCode, String> {
             };
             package::package(&o.games, tpl, o.out.as_deref(), install)
         }
-        "convert" => {
+        "download" => {
             let o = parse_opts(rest)?;
+            let [game, language] = o.paths.as_slice() else {
+                return Err("download needs a game and a language (recomp download sacked en)".into());
+            };
+            let dest = o.dest.clone().unwrap_or_else(|| PathBuf::from("."));
+            download::download(
+                &o.games,
+                &game.to_string_lossy(),
+                &language.to_string_lossy(),
+                &dest,
+            )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        "convert" => {
+            let mut o = parse_opts(rest)?;
+            if let Some(game) = o.download.clone() {
+                let language = o.language.clone().ok_or("--download needs --language")?;
+                let dest = o.dest.clone().unwrap_or_else(|| PathBuf::from("."));
+                let path = download::download(&o.games, &game, &language, &dest)?;
+                o.paths = vec![path];
+            }
             if o.system.is_some() || o.template.is_some() {
                 let [media] = o.paths.as_slice() else {
                     return Err("convert needs exactly one installer or zip".into());
