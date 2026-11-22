@@ -49,7 +49,9 @@ impl Compound {
             }
             let s = sector(difat)?;
             for i in 0..ss / 4 - 1 {
-                fat_sectors.push(u32::from_le_bytes(s[i * 4..i * 4 + 4].try_into().expect("4")));
+                fat_sectors.push(u32::from_le_bytes(
+                    s[i * 4..i * 4 + 4].try_into().expect("4"),
+                ));
             }
             difat = u32::from_le_bytes(s[ss - 4..].try_into().expect("4"));
         }
@@ -58,8 +60,8 @@ impl Compound {
             if f > MAX_REGULAR {
                 continue;
             }
-            for c in sector(f)?.chunks_exact(4) {
-                fat.push(u32::from_le_bytes(c.try_into().expect("4")));
+            for c in sector(f)?.as_chunks::<4>().0 {
+                fat.push(u32::from_le_bytes(*c));
             }
         }
         let chain = |start: u32, table: &[u32]| -> Result<Vec<u32>> {
@@ -70,9 +72,9 @@ impl Compound {
                     return format_err("compound file chain loops");
                 }
                 out.push(n);
-                n = *table
-                    .get(n as usize)
-                    .ok_or_else(|| Error::Format(format!("compound file chain leaves the FAT at {n}")))?;
+                n = *table.get(n as usize).ok_or_else(|| {
+                    Error::Format(format!("compound file chain leaves the FAT at {n}"))
+                })?;
             }
             Ok(out)
         };
@@ -90,18 +92,22 @@ impl Compound {
             Vec::new()
         };
         let mini_fat: Vec<u32> = mini_fat_bytes
-            .chunks_exact(4)
-            .map(|c| u32::from_le_bytes(c.try_into().expect("4")))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| u32::from_le_bytes(*c))
             .collect();
         let cutoff = u64::from(le32(0x38));
         let mut mini_stream = Vec::new();
         let mut streams = BTreeMap::new();
-        for (i, e) in dir.chunks_exact(128).enumerate() {
+        for (i, e) in dir.as_chunks::<128>().0.iter().enumerate() {
             let kind = e[0x42];
             let name_len = usize::from(u16::from_le_bytes([e[0x40], e[0x41]])).min(64);
             let name: Vec<u16> = e[..name_len.saturating_sub(2)]
-                .chunks_exact(2)
-                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| u16::from_le_bytes(*c))
                 .collect();
             let start = u32::from_le_bytes(e[0x74..0x78].try_into().expect("4"));
             let size = u64::from(u32::from_le_bytes(e[0x78..0x7c].try_into().expect("4")));
@@ -114,9 +120,13 @@ impl Compound {
                         let mut out = Vec::new();
                         for n in chain(start, &mini_fat)? {
                             let at = n as usize * 64;
-                            out.extend_from_slice(mini_stream.get(at..at + 64).ok_or_else(|| {
-                                Error::Format(format!("compound file mini sector {n} out of range"))
-                            })?);
+                            out.extend_from_slice(mini_stream.get(at..at + 64).ok_or_else(
+                                || {
+                                    Error::Format(format!(
+                                        "compound file mini sector {n} out of range"
+                                    ))
+                                },
+                            )?);
                         }
                         out
                     } else {

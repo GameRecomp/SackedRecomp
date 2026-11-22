@@ -85,7 +85,8 @@ impl Installer {
         let mut fh = [0u8; 28];
         file.seek(SeekFrom::Start(first))?;
         file.read_exact(&mut fh)?;
-        let word = |b: &[u8], i: usize| u32::from_le_bytes(b[i * 4..i * 4 + 4].try_into().expect("4"));
+        let word =
+            |b: &[u8], i: usize| u32::from_le_bytes(b[i * 4..i * 4 + 4].try_into().expect("4"));
         let header_size = word(&fh, 5) as usize;
         let following = u64::from(word(&fh, 6));
         if first + following != total {
@@ -145,7 +146,9 @@ impl Installer {
             let sec = HEADER_WORDS + s * SECTION_WORDS;
             let (code, count) = (word(sec + 2)?, word(sec + 3)?);
             if code < 0 || count < 0 || code + count > entries {
-                return format_err(format!("NSIS section {s}: entries {code}+{count} out of range"));
+                return format_err(format!(
+                    "NSIS section {s}: entries {code}+{count} out of range"
+                ));
             }
             for e in code..code + count {
                 let w = entry_base + e as usize * ENTRY_WORDS;
@@ -225,10 +228,10 @@ impl Installer {
     fn measure(&mut self) -> Result<()> {
         let mut sizes: BTreeMap<u64, u64> = BTreeMap::new();
         for b in self.blocks.clone() {
-            if !sizes.contains_key(&b) {
+            if let std::collections::btree_map::Entry::Vacant(slot) = sizes.entry(b) {
                 let mut count = CountSink(0);
                 self.copy_block(b, &mut count)?;
-                sizes.insert(b, count.0);
+                slot.insert(count.0);
             }
         }
         for (e, b) in self.entries.iter_mut().zip(&self.blocks) {
@@ -381,7 +384,9 @@ impl Archive for Installer {
             sink.begin(&path, size)?;
             let got = self.copy_block(block, &mut SinkWriter(sink))?;
             if got != size {
-                return Err(Error::Checksum(format!("{path}: {got} bytes, {size} expected")));
+                return Err(Error::Checksum(format!(
+                    "{path}: {got} bytes, {size} expected"
+                )));
             }
             sink.end()?;
             n += 1;
@@ -469,12 +474,21 @@ mod tests {
     #[test]
     fn reads_the_limbic_layout() {
         let mut inst = Installer::from_reader(Box::new(Cursor::new(installer()))).unwrap();
-        let paths: Vec<_> = inst.entries().iter().map(|e| (e.path.as_str(), e.size)).collect();
-        assert_eq!(paths, [("Sub/a.txt", 5), ("Sub/b.bin", 3000), ("Sub/c.bin", 3000)]);
+        let paths: Vec<_> = inst
+            .entries()
+            .iter()
+            .map(|e| (e.path.as_str(), e.size))
+            .collect();
+        assert_eq!(
+            paths,
+            [("Sub/a.txt", 5), ("Sub/b.bin", 3000), ("Sub/c.bin", 3000)]
+        );
         assert_eq!(inst.directories(), ["Sub"]);
         let r = &inst.registry()[0];
-        assert_eq!((r.root, r.key.as_str(), r.name.as_str(), r.value.as_str()),
-                   ("HKLM", "Software\\Test", "Install_Dir", "{app}"));
+        assert_eq!(
+            (r.root, r.key.as_str(), r.name.as_str(), r.value.as_str()),
+            ("HKLM", "Software\\Test", "Install_Dir", "{app}")
+        );
         struct Mem(Vec<(String, Vec<u8>)>);
         impl Sink for Mem {
             fn dir(&mut self, _: &str) -> Result<()> {

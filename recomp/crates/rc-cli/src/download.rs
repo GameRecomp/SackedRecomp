@@ -53,7 +53,9 @@ pub fn download(games: &Path, game: &str, language: &str, dest: &Path) -> Result
         .ok_or_else(|| format!("{game}/{}: no download address", v.id))?;
     fs::create_dir_all(dest).map_err(|e| format!("{}: {e}", dest.display()))?;
     let path = dest.join(&media.file);
-    if path.is_file() && rc_manifest::sha256_file(&path).ok().as_deref() == Some(media.sha256.as_str()) {
+    if path.is_file()
+        && rc_manifest::sha256_file(&path).ok().as_deref() == Some(media.sha256.as_str())
+    {
         println!("{}: already there", path.display());
         return Ok(path);
     }
@@ -65,7 +67,16 @@ pub fn download(games: &Path, game: &str, language: &str, dest: &Path) -> Result
         media.size >> 20
     );
     let st = Command::new("curl")
-        .args(["--fail", "--location", "--retry", "3", "--progress-bar", "--continue-at", "-", "--output"])
+        .args([
+            "--fail",
+            "--location",
+            "--retry",
+            "3",
+            "--progress-bar",
+            "--continue-at",
+            "-",
+            "--output",
+        ])
         .arg(&part)
         .arg(url)
         .status()

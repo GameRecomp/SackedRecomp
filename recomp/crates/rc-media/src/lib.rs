@@ -353,9 +353,8 @@ impl Seek for SharedReader {
                 len.checked_add_signed(d)
             }
         };
-        self.pos = target.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "seek before the start")
-        })?;
+        self.pos = target
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "seek before the start"))?;
         Ok(self.pos)
     }
 }
@@ -477,7 +476,10 @@ pub fn open(path: &Path) -> Result<(MediaType, Box<dyn Archive>)> {
         }
         return Ok((MediaType::Inno, Box::new(inno::Installer::open(path)?)));
     }
-    open_readers(Box::new(io::BufReader::new(fs::File::open(path)?)), Vec::new())
+    open_readers(
+        Box::new(io::BufReader::new(fs::File::open(path)?)),
+        Vec::new(),
+    )
 }
 
 /// Open a medium from any reader (in a browser: the chosen file in pieces): see [`open`].
@@ -588,7 +590,10 @@ fn open_cd(r: Box<dyn ReadSeek>) -> Result<(MediaType, Box<dyn Archive>)> {
         let (m, c) = (*m, *c);
         let msi = img.read_entry(m)?;
         let cab = img.into_entry_reader(c);
-        return Ok((MediaType::IsoInstaller, Box::new(msi::Package::open(&msi, Box::new(cab))?)));
+        return Ok((
+            MediaType::IsoInstaller,
+            Box::new(msi::Package::open(&msi, Box::new(cab))?),
+        ));
     }
     // An installer program in the root (a launcher such as Autostart.exe is no installer).
     let mut exes: Vec<(String, usize)> = img

@@ -163,8 +163,12 @@ fn parse_opts(args: &[String]) -> Result<Opts, String> {
                 o.templates = Some(it.next().ok_or("--templates needs a folder")?.into())
             }
             "--template" => o.template = Some(it.next().ok_or("--template needs a file")?.into()),
-            "--download" => o.download = Some(it.next().ok_or("--download needs a game id")?.clone()),
-            "--language" => o.language = Some(it.next().ok_or("--language needs a language")?.clone()),
+            "--download" => {
+                o.download = Some(it.next().ok_or("--download needs a game id")?.clone())
+            }
+            "--language" => {
+                o.language = Some(it.next().ok_or("--language needs a language")?.clone())
+            }
             "--native" => {
                 let t = it
                     .next()
@@ -263,7 +267,9 @@ fn run(args: &[String]) -> Result<ExitCode, String> {
         "download" => {
             let o = parse_opts(rest)?;
             let [game, language] = o.paths.as_slice() else {
-                return Err("download needs a game and a language (recomp download sacked en)".into());
+                return Err(
+                    "download needs a game and a language (recomp download sacked en)".into(),
+                );
             };
             let dest = o.dest.clone().unwrap_or_else(|| PathBuf::from("."));
             download::download(

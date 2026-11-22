@@ -23,7 +23,6 @@
 //!   chunks (the header's compression: zlib, bzip2 or LZMA1), checked by MD5, executables stored
 //!   with the 4.1.8 call-instruction filter (relative `call`/`jmp` targets made absolute).
 
-
 use crate::inno::{RegistryEntry, RegistryValue};
 use crate::md5::Md5;
 use crate::{format_err, Archive, DirSink, Entry, Error, ReadSeek, Result, Sink};
@@ -259,8 +258,8 @@ impl Installer {
         if v4 {
             p.skip(16 + 8)?; // password MD5 and salt
             p.skip(8 + 4)?; // extra disk space, slices per disk
-            // install mode, uninstall log mode and style, dir exists warning, privileges,
-            // language dialog and detection
+                            // install mode, uninstall log mode and style, dir exists warning, privileges,
+                            // language dialog and detection
             p.skip(7)?;
             self.compression = match (v426, p.u8()?) {
                 (false, 0) | (true, 1) => Compression::Zlib,
@@ -279,7 +278,9 @@ impl Installer {
             encrypted = false;
         }
         if bzip || encrypted {
-            return Err(Error::Unsupported("bzip2-compressed or encrypted Inno Setup data".into()));
+            return Err(Error::Unsupported(
+                "bzip2-compressed or encrypted Inno Setup data".into(),
+            ));
         }
         for _ in 0..languages {
             if v4 {
@@ -435,7 +436,9 @@ impl Installer {
                 let adler32 = q.u32()?;
                 q.skip(8 + 8)?;
                 if q.u8()? & DATA30_BZIPPED != 0 {
-                    return Err(Error::Unsupported("a bzip2-compressed Inno Setup 3 file".into()));
+                    return Err(Error::Unsupported(
+                        "a bzip2-compressed Inno Setup 3 file".into(),
+                    ));
                 }
                 DataEntry {
                     chunk_offset,
@@ -514,7 +517,9 @@ impl Installer {
             .collect();
         for t in &targets {
             if t.paths.len() > 1 {
-                return Err(Error::Unsupported("an Inno Setup file installed twice".into()));
+                return Err(Error::Unsupported(
+                    "an Inno Setup file installed twice".into(),
+                ));
             }
         }
         let mut router = Router {
@@ -618,7 +623,9 @@ impl Router<'_> {
 
     fn finish(mut self) -> Result<()> {
         // Empty files at the very end.
-        while self.next < self.targets.len() && self.targets[self.next].start == self.targets[self.next].end {
+        while self.next < self.targets.len()
+            && self.targets[self.next].start == self.targets[self.next].end
+        {
             self.feed(&[])?;
             let t = &self.targets[self.next];
             self.sink.begin(&t.paths[0], 0)?;
@@ -637,7 +644,8 @@ impl Router<'_> {
 
 impl Write for Router<'_> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.feed(buf).map_err(|e| io::Error::other(e.to_string()))?;
+        self.feed(buf)
+            .map_err(|e| io::Error::other(e.to_string()))?;
         Ok(buf.len())
     }
     fn flush(&mut self) -> io::Result<()> {
@@ -688,7 +696,11 @@ fn read_block_30(r: &mut impl Read) -> Result<Vec<u8>> {
     }
     let compressed = u32::from_le_bytes(h[4..8].try_into().expect("4"));
     let size = u32::from_le_bytes(h[8..12].try_into().expect("4"));
-    let stored = if compressed == u32::MAX { size } else { compressed } as usize;
+    let stored = if compressed == u32::MAX {
+        size
+    } else {
+        compressed
+    } as usize;
     let payload = read_sub_blocks(r, stored, false)?;
     if compressed == u32::MAX {
         return Ok(payload);
@@ -862,7 +874,10 @@ mod tests {
 
     #[test]
     fn app_paths() {
-        assert_eq!(strip_app("{app}\\Levels\\a.col").as_deref(), Some("Levels/a.col"));
+        assert_eq!(
+            strip_app("{app}\\Levels\\a.col").as_deref(),
+            Some("Levels/a.col")
+        );
         assert_eq!(strip_app("{APP}").as_deref(), Some(""));
         assert_eq!(strip_app("{sys}\\x.dll"), None);
         assert_eq!(strip_app("{apps}\\x"), None);

@@ -13,7 +13,9 @@ use std::io::{self, Read, Seek, SeekFrom};
 
 pub const RAW_SECTOR: u64 = 2352;
 pub const COOKED_SECTOR: u64 = 2048;
-const SYNC: [u8; 12] = [0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0];
+const SYNC: [u8; 12] = [
+    0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0,
+];
 
 /// Where the user data of each raw sector of `r` starts, if `r` is a raw CD image: 16 for Mode 1,
 /// 24 for Mode 2 (Form 1). `None` for anything else (a cooked ISO, an exe, …).

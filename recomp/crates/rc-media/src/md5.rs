@@ -29,25 +29,27 @@ impl Md5 {
                 self.buf.clear();
             }
         }
-        let mut chunks = data.chunks_exact(64);
-        for c in &mut chunks {
-            self.block(c.try_into().expect("64"));
+        let (blocks, rest) = data.as_chunks::<64>();
+        for c in blocks {
+            self.block(c);
         }
-        self.buf.extend_from_slice(chunks.remainder());
+        self.buf.extend_from_slice(rest);
     }
 
     fn block(&mut self, b: &[u8; 64]) {
         const S: [u32; 64] = [
             7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20,
-            5, 9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16,
-            23, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
+            5, 9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+            6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
         ];
         let m: Vec<u32> = b
-            .chunks_exact(4)
-            .map(|c| u32::from_le_bytes(c.try_into().expect("4")))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| u32::from_le_bytes(*c))
             .collect();
         let [mut a, mut bb, mut c, mut d] = self.state;
-        for i in 0..64 {
+        for (i, &shift) in S.iter().enumerate() {
             let (f, g) = match i / 16 {
                 0 => ((bb & c) | (!bb & d), i),
                 1 => ((d & bb) | (!d & c), (5 * i + 1) % 16),
@@ -62,7 +64,7 @@ impl Md5 {
                 a.wrapping_add(f)
                     .wrapping_add(k)
                     .wrapping_add(m[g])
-                    .rotate_left(S[i]),
+                    .rotate_left(shift),
             );
             a = t;
         }

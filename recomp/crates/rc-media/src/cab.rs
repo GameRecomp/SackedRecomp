@@ -21,6 +21,9 @@ const FLAG_RESERVE: u16 = 4;
 const COMPRESS_NONE: u16 = 0;
 const COMPRESS_MSZIP: u16 = 1;
 const BLOCK_MAX: usize = 32 * 1024;
+
+/// What receives a file's bytes from [`Cabinet::extract`]: `(file, piece, last piece)`.
+pub type PieceFn<'a> = dyn FnMut(usize, &[u8], bool) -> Result<()> + 'a;
 const WINDOW: usize = 32 * 1024;
 
 #[derive(Debug, Clone)]
@@ -59,7 +62,9 @@ impl Cabinet {
         let files_at = u64::from(le32(16));
         let (folders, files, flags) = (le16(26), le16(28), le16(30));
         if flags & (FLAG_PREV | FLAG_NEXT) != 0 {
-            return Err(Error::Unsupported("cabinet sets spanning several files".into()));
+            return Err(Error::Unsupported(
+                "cabinet sets spanning several files".into(),
+            ));
         }
         let (mut folder_reserve, mut data_reserve) = (0usize, 0usize);
         if flags & FLAG_RESERVE != 0 {
@@ -127,11 +132,7 @@ impl Cabinet {
 
     /// Unpack the files `wanted` (indices into `files`), in cabinet order. `out` is called
     /// with each file index and gives the writer its bytes go to (`None`: skip the file).
-    pub fn extract(
-        &mut self,
-        wanted: &[usize],
-        out: &mut dyn FnMut(usize, &[u8], bool) -> Result<()>,
-    ) -> Result<()> {
+    pub fn extract(&mut self, wanted: &[usize], out: &mut PieceFn<'_>) -> Result<()> {
         let mut by_folder: Vec<Vec<usize>> = vec![Vec::new(); self.folders.len()];
         for &i in wanted {
             by_folder[usize::from(self.files[i].folder)].push(i);
@@ -148,14 +149,10 @@ impl Cabinet {
 
     /// Stream folder `f` and hand the bytes of the files in `list` (sorted by offset) to `out`:
     /// `out(file, bytes, last)` for each piece, `last` on the final one of a file.
-    fn extract_folder(
-        &mut self,
-        f: usize,
-        list: &[usize],
-        out: &mut dyn FnMut(usize, &[u8], bool) -> Result<()>,
-    ) -> Result<()> {
+    fn extract_folder(&mut self, f: usize, list: &[usize], out: &mut PieceFn<'_>) -> Result<()> {
         let folder = self.folders[f].clone();
-        self.r.seek(SeekFrom::Start(u64::from(folder.first_block)))?;
+        self.r
+            .seek(SeekFrom::Start(u64::from(folder.first_block)))?;
         // [window | block]: the last 32 KiB of output, then the block being inflated.
         let mut buf = vec![0u8; WINDOW + BLOCK_MAX];
         let mut window = 0usize;
@@ -205,7 +202,10 @@ impl Cabinet {
             let (start, end) = (pos, pos + size as u64);
             while next < list.len() {
                 let file = &self.files[list[next]];
-                let (fs, fe) = (u64::from(file.offset), u64::from(file.offset) + u64::from(file.size));
+                let (fs, fe) = (
+                    u64::from(file.offset),
+                    u64::from(file.offset) + u64::from(file.size),
+                );
                 if fs >= end && file.size > 0 {
                     break;
                 }
@@ -290,7 +290,11 @@ mod tests {
         c.extend(2u16.to_le_bytes());
         c.extend(COMPRESS_MSZIP.to_le_bytes());
         for (i, n) in names.iter().enumerate() {
-            let (size, off) = if i == 0 { (30_000u32, 0u32) } else { (10_000, 30_000) };
+            let (size, off) = if i == 0 {
+                (30_000u32, 0u32)
+            } else {
+                (10_000, 30_000)
+            };
             c.extend(size.to_le_bytes());
             c.extend(off.to_le_bytes());
             c.extend(0u16.to_le_bytes());
@@ -307,7 +311,7 @@ mod tests {
         let mut cab = Cabinet::open(Box::new(Cursor::new(c))).unwrap();
         assert_eq!(cab.files.len(), 2);
         assert_eq!(cab.files[1].name, "b.bin");
-        let mut got = vec![Vec::new(), Vec::new()];
+        let mut got = [Vec::new(), Vec::new()];
         let mut ends = 0;
         cab.extract(&[1, 0], &mut |i, piece, last| {
             got[i].extend_from_slice(piece);

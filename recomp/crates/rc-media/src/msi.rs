@@ -104,7 +104,13 @@ fn cp1251(bytes: &[u8]) -> String {
     let high: Vec<char> = HIGH.chars().collect();
     bytes
         .iter()
-        .map(|&b| if b < 0x80 { char::from(b) } else { high[usize::from(b - 0x80)] })
+        .map(|&b| {
+            if b < 0x80 {
+                char::from(b)
+            } else {
+                high[usize::from(b - 0x80)]
+            }
+        })
         .collect()
 }
 
@@ -152,10 +158,26 @@ impl Database {
         };
         // _Columns: Table (string), Number (i2), Name (string), Type (i2).
         let fixed = vec![
-            Column { name: "Table".into(), string: true, width: 0 },
-            Column { name: "Number".into(), string: false, width: 2 },
-            Column { name: "Name".into(), string: true, width: 0 },
-            Column { name: "Type".into(), string: false, width: 2 },
+            Column {
+                name: "Table".into(),
+                string: true,
+                width: 0,
+            },
+            Column {
+                name: "Number".into(),
+                string: false,
+                width: 2,
+            },
+            Column {
+                name: "Name".into(),
+                string: true,
+                width: 0,
+            },
+            Column {
+                name: "Type".into(),
+                string: false,
+                width: 2,
+            },
         ];
         let rows = db.rows_with("_Columns", &fixed)?;
         let mut cols: BTreeMap<String, Vec<(i32, Column)>> = BTreeMap::new();
@@ -174,7 +196,8 @@ impl Database {
         }
         for (t, mut c) in cols {
             c.sort_by_key(|(n, _)| *n);
-            db.columns.insert(t, c.into_iter().map(|(_, c)| c).collect());
+            db.columns
+                .insert(t, c.into_iter().map(|(_, c)| c).collect());
         }
         Ok(db)
     }
@@ -196,9 +219,15 @@ impl Database {
             return Ok(Vec::new());
         };
         let sref = if self.long_refs { 3 } else { 2 };
-        let row_size: usize = cols.iter().map(|c| if c.string { sref } else { c.width }).sum();
+        let row_size: usize = cols
+            .iter()
+            .map(|c| if c.string { sref } else { c.width })
+            .sum();
         if row_size == 0 || data.len() % row_size != 0 {
-            return format_err(format!("MSI table {table}: {} bytes, rows of {row_size}", data.len()));
+            return format_err(format!(
+                "MSI table {table}: {} bytes, rows of {row_size}",
+                data.len()
+            ));
         }
         let n = data.len() / row_size;
         let mut rows = vec![Vec::with_capacity(cols.len()); n];
@@ -274,9 +303,17 @@ impl Package {
         let db = Database::parse(msi)?;
         let media = db.table("Media")?;
         if media.len() != 1 {
-            return Err(Error::Unsupported(format!("MSI with {} media", media.len())));
+            return Err(Error::Unsupported(format!(
+                "MSI with {} media",
+                media.len()
+            )));
         }
-        if media[0].get("Cabinet").map(Value::str).unwrap_or("").starts_with('#') {
+        if media[0]
+            .get("Cabinet")
+            .map(Value::str)
+            .unwrap_or("")
+            .starts_with('#')
+        {
             return Err(Error::Unsupported("MSI with its cabinet inside".into()));
         }
         // Directory paths from the root (TARGETDIR), by long target names.
@@ -286,7 +323,12 @@ impl Package {
             .map(|r| {
                 let key = r["Directory"].str().to_string();
                 let parent = r["Directory_Parent"].str().to_string();
-                let target = r["DefaultDir"].str().split(':').next().unwrap_or("").to_string();
+                let target = r["DefaultDir"]
+                    .str()
+                    .split(':')
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
                 (key, (parent, long_name(&target).to_string()))
             })
             .collect();
@@ -294,7 +336,12 @@ impl Package {
         let components: BTreeMap<String, String> = db
             .table("Component")?
             .into_iter()
-            .map(|r| (r["Component"].str().to_string(), r["Directory_"].str().to_string()))
+            .map(|r| {
+                (
+                    r["Component"].str().to_string(),
+                    r["Directory_"].str().to_string(),
+                )
+            })
             .collect();
         let mut files = Vec::new();
         for r in db.table("File")? {
@@ -330,14 +377,19 @@ impl Package {
                 .get(key.as_str())
                 .ok_or_else(|| Error::Format(format!("{key}: not in the cabinet")))?;
             if u64::from(cab.files[m].size) != *size {
-                return Err(Error::Checksum(format!("{key}: cabinet and database sizes differ")));
+                return Err(Error::Checksum(format!(
+                    "{key}: cabinet and database sizes differ"
+                )));
             }
             let rel = path[common.len()..].join("/");
             crate::safe_relative(&rel)?;
             for k in 1..path.len() - common.len() {
                 directories.insert(path[common.len()..common.len() + k].join("/"));
             }
-            entries.push(Entry { path: rel, size: *size });
+            entries.push(Entry {
+                path: rel,
+                size: *size,
+            });
             members.push(m);
         }
         // Registry values that name the install directory get Inno's {app}.
@@ -424,7 +476,9 @@ impl Archive for Package {
             // A member named by several entries is written for the first; copies are rare and
             // not needed by the supported package.
             if list.len() > 1 {
-                return Err(Error::Unsupported("an MSI cabinet member installed twice".into()));
+                return Err(Error::Unsupported(
+                    "an MSI cabinet member installed twice".into(),
+                ));
             }
             let e = &entries[list[0]];
             if open != Some(m) {

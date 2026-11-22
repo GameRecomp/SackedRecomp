@@ -590,7 +590,10 @@ mod tests {
             .iter()
             .flat_map(|m| &m.variants)
             .flat_map(|v| &v.media)
-            .all(|m| m.url.as_deref().is_some_and(|u| u.starts_with("https://archive.org/download/"))));
+            .all(|m| m
+                .url
+                .as_deref()
+                .is_some_and(|u| u.starts_with("https://archive.org/download/"))));
         let mains: BTreeSet<_> = ms
             .iter()
             .flat_map(|m| &m.binaries)
@@ -616,8 +619,14 @@ mod tests {
         ));
         // Two builds of ogg.dll, one per game, both 48 KiB.
         let ogg = |h: &str| c.lookup(h).len();
-        assert_eq!(ogg("a391e1e2dbbb11f1c5041482223e8b014530649bccbf6c2cb95d9f173981445f"), 1);
-        assert_eq!(ogg("308540dbd488f3bceca2dbadefe02cf29d10a27c4ac096bb3da053e3e0b923ea"), 1);
+        assert_eq!(
+            ogg("a391e1e2dbbb11f1c5041482223e8b014530649bccbf6c2cb95d9f173981445f"),
+            1
+        );
+        assert_eq!(
+            ogg("308540dbd488f3bceca2dbadefe02cf29d10a27c4ac096bb3da053e3e0b923ea"),
+            1
+        );
         assert!(c.is_known_size(49152));
         assert!(c.lookup(&"0".repeat(64)).is_empty());
     }
@@ -629,8 +638,17 @@ mod tests {
         let ms = load_dir(&repo_games()).unwrap();
         for v in ms.iter().flat_map(|m| &m.variants) {
             for md in &v.media {
-                assert!(page.contains(&md.sha256), "web/games.js lacks {} ({})", md.file, md.sha256);
-                assert!(page.contains(&md.size.to_string()), "web/games.js lacks the size of {}", md.file);
+                assert!(
+                    page.contains(&md.sha256),
+                    "web/games.js lacks {} ({})",
+                    md.file,
+                    md.sha256
+                );
+                assert!(
+                    page.contains(&md.size.to_string()),
+                    "web/games.js lacks the size of {}",
+                    md.file
+                );
             }
         }
     }

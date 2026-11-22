@@ -838,7 +838,10 @@ impl<'a> Engine<'a> {
     }
 
     pub fn import_noret(&self, slot: u32) -> bool {
-        self.img.imports.get(&slot).is_some_and(|n| is_noreturn_import(n))
+        self.img
+            .imports
+            .get(&slot)
+            .is_some_and(|n| is_noreturn_import(n))
     }
 
     fn classify(

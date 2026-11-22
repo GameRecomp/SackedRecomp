@@ -8,7 +8,9 @@
 //! 64-bit sizes and an MD5 per file (checked here) and may link a file to another one's data.
 
 use crate::md5::Md5;
-use crate::{codepage, cstr, format_err, le16, le32, Archive, Entry, Error, ReadSeek, Result, Sink};
+use crate::{
+    codepage, cstr, format_err, le16, le32, Archive, Entry, Error, ReadSeek, Result, Sink,
+};
 use flate2::{Decompress, FlushDecompress, Status};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -111,7 +113,12 @@ impl Cabinet {
                     volume: 1,
                     md5: None,
                 };
-                (le32(hdr, d)? as usize, usize::from(le16(hdr, d + 0x04)?), f, None)
+                (
+                    le32(hdr, d)? as usize,
+                    usize::from(le16(hdr, d + 0x04)?),
+                    f,
+                    None,
+                )
             } else {
                 let d = t2 + i * V6_DESCRIPTOR;
                 let md5: [u8; 16] = hdr
@@ -129,8 +136,15 @@ impl Cabinet {
                     md5: Some(md5),
                 };
                 let link_flags = hdr.get(d + 0x54).copied().unwrap_or(0);
-                let link = (link_flags & LINK_PREV != 0).then(|| le32(hdr, d + 0x4c)).transpose()?;
-                (le32(hdr, d + 0x3a)? as usize, usize::from(le16(hdr, d + 0x3e)?), f, link)
+                let link = (link_flags & LINK_PREV != 0)
+                    .then(|| le32(hdr, d + 0x4c))
+                    .transpose()?;
+                (
+                    le32(hdr, d + 0x3a)? as usize,
+                    usize::from(le16(hdr, d + 0x3e)?),
+                    f,
+                    link,
+                )
             };
             all[i] = Some(file.clone());
             if file.flags & FLAG_INVALID != 0 || name_off == 0 {
@@ -139,9 +153,14 @@ impl Cabinet {
             if let Some(prev) = link {
                 // The data is another file's: read that one's.
                 let Some(Some(p)) = all.get(prev as usize).cloned() else {
-                    return format_err(format!("file {i} links to file {prev}, which is not before it"));
+                    return format_err(format!(
+                        "file {i} links to file {prev}, which is not before it"
+                    ));
                 };
-                file = CabFile { index: file.index, ..p };
+                file = CabFile {
+                    index: file.index,
+                    ..p
+                };
             } else if file.data_offset == 0 {
                 continue;
             }
@@ -221,18 +240,16 @@ impl Cabinet {
             // As the last file of a volume a file may go on in the next one; as the first file
             // of a volume it may come from the previous one; else it is where its descriptor says.
             // (A volume whose files do not span leaves these fields 0.)
-            let (offset, size) = if f.index == h.last_index
-                && h.last_offset != 0x7fff_ffff
-                && h.last_offset != 0
-            {
-                (h.last_offset, h.last_compressed)
-            } else if f.index == h.first_index && h.first_offset != 0 {
-                (h.first_offset, h.first_compressed)
-            } else if first {
-                (f.data_offset, total)
-            } else {
-                return format_err(format!("{path}: not continued in cabinet volume {vol}"));
-            };
+            let (offset, size) =
+                if f.index == h.last_index && h.last_offset != 0x7fff_ffff && h.last_offset != 0 {
+                    (h.last_offset, h.last_compressed)
+                } else if f.index == h.first_index && h.first_offset != 0 {
+                    (h.first_offset, h.first_compressed)
+                } else if first {
+                    (f.data_offset, total)
+                } else {
+                    return format_err(format!("{path}: not continued in cabinet volume {vol}"));
+                };
             if f.index < h.first_index || f.index > h.last_index {
                 return format_err(format!("{path}: not in cabinet volume {vol}"));
             }
