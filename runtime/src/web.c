@@ -6,13 +6,16 @@
 
 #include <emscripten.h>
 
+static double last; /* when the browser last had its turn */
+
+void rc_web_turn(void) { last = emscripten_get_now(); }
+
 void rc_web_poll(void)
 {
-    static double last;
     double now = emscripten_get_now();
     if (now - last >= 16.0) {
         rc_web_yield();
-        last = emscripten_get_now();
+        rc_web_turn();
     }
 }
 

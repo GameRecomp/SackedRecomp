@@ -33,6 +33,10 @@ void rc_web_poll(void);
 /* async: wait `ms` milliseconds, the browser running meanwhile. */
 void rc_web_sleep(uint32_t ms);
 
+/* The browser has just had its turn (an animation frame, a sleep): rc_web_poll counts its 16 ms
+ * from here, so that a program that waits for each frame is not interrupted within it too. */
+void rc_web_turn(void);
+
 /* async: wait for the page's next animation frame (the display's refresh). */
 void rc_web_frame(void);
 

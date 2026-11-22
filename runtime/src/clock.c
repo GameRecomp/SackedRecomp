@@ -91,6 +91,7 @@ void rc_sleep_ms(uint32_t ms)
         rc_web_poll();
     } else {
         rc_web_sleep(ms);
+        rc_web_turn();
     }
 #else
     struct timespec ts = {(time_t)(ms / 1000), (long)(ms % 1000) * 1000000L};

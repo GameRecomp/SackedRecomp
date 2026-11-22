@@ -277,6 +277,7 @@ void rc_thread_wait_frame(uint32_t ms)
 #if BACKEND_JSPI
     (void)ms;
     rc_web_frame();
+    rc_web_turn();
 #else
     rc_thread_sleep(ms);
 #endif

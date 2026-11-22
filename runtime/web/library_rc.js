@@ -52,6 +52,7 @@ addToLibrary({
     BLOCK: 256 * 1024,
     CACHE_BLOCKS: 1024,
     cache: new Map(), // "path:block" -> Uint8Array, oldest first
+    loading: new Map(), // "path:block" -> the promise of a block being read
 
     key(path, b) { return `${path}:${b}`; },
 
@@ -66,14 +67,22 @@ addToLibrary({
       return v;
     },
 
-    async fetch(path, entry, b) {
-      const start = b * RC.BLOCK;
-      const end = Math.min(entry.size, start + RC.BLOCK);
-      const data = new Uint8Array(await entry.file.slice(start, end).arrayBuffer());
-      RC.cache.set(RC.key(path, b), data);
-      while (RC.cache.size > RC.CACHE_BLOCKS) {
-        RC.cache.delete(RC.cache.keys().next().value);
+    // Read block `b` into the cache; a block already being read is not read twice.
+    fetch(path, entry, b) {
+      const k = RC.key(path, b);
+      let p = RC.loading.get(k);
+      if (!p) {
+        const start = b * RC.BLOCK;
+        const end = Math.min(entry.size, start + RC.BLOCK);
+        p = entry.file.slice(start, end).arrayBuffer().then((buf) => {
+          RC.cache.set(k, new Uint8Array(buf));
+          while (RC.cache.size > RC.CACHE_BLOCKS) {
+            RC.cache.delete(RC.cache.keys().next().value);
+          }
+        }).finally(() => RC.loading.delete(k));
+        RC.loading.set(k, p);
       }
+      return p;
     },
 
     // The file system at /data/game: the files the page lists, read-only,
@@ -250,6 +259,12 @@ addToLibrary({
     const missing = [];
     for (let b = first; b <= last; b++) {
       if (!RC.get(node.rcPath, b)) missing.push(RC.fetch(node.rcPath, entry, b));
+    }
+    // Read ahead, without waiting: a file read on (the music streamed, a level's data) then finds
+    // its next block there instead of stopping the game while it is read.
+    const next = last + 1;
+    if (next * RC.BLOCK < entry.size && !RC.cache.has(RC.key(node.rcPath, next))) {
+      RC.fetch(node.rcPath, entry, next).catch(() => {});
     }
     if (missing.length) return Promise.all(missing).then(() => {});
   },
