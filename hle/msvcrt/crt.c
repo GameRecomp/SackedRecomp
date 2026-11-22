@@ -199,13 +199,13 @@ static void k__controlfp(rc_cpu *c)
 /* ---- exit ---- */
 
 #define ONEXIT_MAX 64
-static uint32_t onexit[ONEXIT_MAX];
+static uint32_t onexit_fns[ONEXIT_MAX];
 static uint32_t nonexit;
 
 static void run_onexit(rc_cpu *c)
 {
     while (nonexit) {
-        uint32_t fn = onexit[--nonexit];
+        uint32_t fn = onexit_fns[--nonexit];
         rc_crt_call(c, fn, 0, NULL);
     }
 }
@@ -216,7 +216,7 @@ static void k__onexit(rc_cpu *c)
     if (nonexit == ONEXIT_MAX) {
         RC_RETURN(c, 0, 0);
     }
-    onexit[nonexit++] = fn;
+    onexit_fns[nonexit++] = fn;
     RC_RETURN(c, fn, 0);
 }
 
