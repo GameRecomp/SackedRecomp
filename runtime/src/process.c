@@ -340,6 +340,45 @@ static rc_module *load_file(const char *name, uint32_t want_base)
     return m;
 }
 
+/* Whether the PE file `name` (in the game directory) imports from DLL `dll`. */
+static bool imports_from(const char *name, const char *dll)
+{
+    char path[RC_PATH_MAX];
+    uint32_t size = 0;
+    uint8_t *file = rc_host_resolve(rc_cfg->game_dir, name, false, path) ? rc_host_read(path, &size) : NULL;
+    bool found = false;
+    if (file && size > 0x40) {
+        uint32_t pe = rd32(file, 0x3c);
+        if (pe + 0x18 < size) {
+            uint32_t nsec = rd16(file, pe + 6), optsize = rd16(file, pe + 20), opt = pe + 24;
+            uint32_t imports = opt + 104 <= size ? rd32(file, opt + 104) : 0;
+            for (uint32_t d = imports; imports && !found; d += 20) {
+                uint32_t fo = 0, name_rva;
+                for (uint32_t i = 0; i < nsec; i++) {
+                    uint32_t h = opt + optsize + 40 * i;
+                    uint32_t va = rd32(file, h + 12), raw = rd32(file, h + 16), ro = rd32(file, h + 20);
+                    if (d >= va && d < va + raw) {
+                        fo = ro + (d - va);
+                    }
+                }
+                if (!fo || fo + 20 > size || !rd32(file, fo + 12)) {
+                    break;
+                }
+                name_rva = rd32(file, fo + 12);
+                for (uint32_t i = 0; i < nsec; i++) {
+                    uint32_t h = opt + optsize + 40 * i;
+                    uint32_t va = rd32(file, h + 12), raw = rd32(file, h + 16), ro = rd32(file, h + 20);
+                    if (name_rva >= va && name_rva < va + raw && ro + (name_rva - va) < size) {
+                        found = same_name((const char *)file + ro + (name_rva - va), dll) != 0;
+                    }
+                }
+            }
+        }
+    }
+    free(file);
+    return found;
+}
+
 int rc_run(const rc_config *cfg)
 {
     rc_cfg = cfg;
@@ -358,11 +397,35 @@ int rc_run(const rc_config *cfg)
      * imports from them bind to their code. */
     rc_module *exe;
     if (cfg->lifted) {
-        /* The binaries this program lifted, each with its own table. */
-        for (uint32_t i = 0; i < cfg->nlifted; i++) {
-            if (!same_name(cfg->lifted[i].file, cfg->exe)) {
-                load_file(cfg->lifted[i].file, cfg->lifted[i].base);
+        /* The binaries this program lifted, each with its own table; a DLL after the lifted
+         * DLLs it imports from (msvcp71 after msvcr71), so its imports bind to their code. */
+        bool loaded[64] = {false};
+        uint32_t n = cfg->nlifted < 64 ? cfg->nlifted : 64, left = 0;
+        for (uint32_t i = 0; i < n; i++) {
+            loaded[i] = same_name(cfg->lifted[i].file, cfg->exe) != 0;
+            left += !loaded[i];
+        }
+        while (left) {
+            uint32_t pick = n;
+            for (uint32_t i = 0; i < n && pick == n; i++) {
+                if (loaded[i]) {
+                    continue;
+                }
+                bool ready = true;
+                for (uint32_t j = 0; j < n && ready; j++) {
+                    ready = loaded[j] || j == i || !imports_from(cfg->lifted[i].file, cfg->lifted[j].file);
+                }
+                if (ready) {
+                    pick = i;
+                }
             }
+            if (pick == n) { /* a cycle: the first that is left */
+                for (pick = 0; loaded[pick]; pick++) {
+                }
+            }
+            load_file(cfg->lifted[pick].file, cfg->lifted[pick].base);
+            loaded[pick] = true;
+            left--;
         }
         exe = load_file(cfg->exe, 0);
     } else {
