@@ -57,3 +57,11 @@ target_link_libraries(rc_hle PUBLIC rc_runtime rc_platform)
 if(WIN32)
     target_link_libraries(rc_hle PRIVATE ws2_32) # dplay: sockets
 endif()
+
+if(RC_BUILD_TESTS)
+    # MSVCRT's exception handling end to end, on hand-made frames (with kernel32's dispatcher).
+    add_executable(rc_hle_tests tests/test_eh.c)
+    target_include_directories(rc_hle_tests PRIVATE "${PROJECT_SOURCE_DIR}/runtime/tests")
+    target_link_libraries(rc_hle_tests PRIVATE rc_hle)
+    add_test(NAME hle COMMAND rc_hle_tests)
+endif()
