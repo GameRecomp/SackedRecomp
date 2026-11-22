@@ -3,9 +3,11 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include "rc/dispatch.h"
-#include "rc/process.h"
 
+#include <string.h>
 #include <time.h>
+
+#include "rc/process.h"
 
 /* The lifted code: one sorted table per binary (a game links several, each
  * with its own; rc_set_lifted installs one). */
@@ -20,8 +22,20 @@ static void (*call_hook)(rc_cpu *c, uint32_t target);
 
 void rc_set_call_hook(void (*hook)(rc_cpu *c, uint32_t target)) { call_hook = hook; }
 
+/* The targets found lately, by address: indirect calls (virtual methods, function pointers) go
+ * to few places over and over, and searching every table each time took a sixth of a Sacked
+ * level's time. Only what was found is kept; the tables changing empties it. */
+#define CACHE 4096u
+static struct {
+    uint32_t addr;
+    rc_fn fn;
+} cache[CACHE];
+
+static void cache_clear(void) { memset(cache, 0, sizeof cache); }
+
 void rc_set_lifted(const rc_fn_entry *t, uint32_t count)
 {
+    cache_clear();
     ntables = 0;
     rc_add_lifted(t, count);
 }
@@ -31,6 +45,7 @@ bool rc_add_lifted(const rc_fn_entry *t, uint32_t count)
     if (ntables == TABLES) {
         return false;
     }
+    cache_clear();
     tables[ntables].entries = t;
     tables[ntables].count = count;
     ntables++;
@@ -110,6 +125,10 @@ rc_fn rc_lookup(uint32_t addr)
 
 rc_fn rc_lookup_lifted(uint32_t addr)
 {
+    uint32_t slot = (addr ^ (addr >> 12)) & (CACHE - 1);
+    if (cache[slot].addr == addr && cache[slot].fn) {
+        return cache[slot].fn;
+    }
     for (uint32_t k = 0; k < ntables; k++) {
         const rc_fn_entry *table = tables[k].entries;
         uint32_t lo = 0, hi = tables[k].count;
@@ -122,6 +141,8 @@ rc_fn rc_lookup_lifted(uint32_t addr)
             }
         }
         if (lo < tables[k].count && table[lo].addr == addr) {
+            cache[slot].addr = addr;
+            cache[slot].fn = table[lo].fn;
             return table[lo].fn;
         }
     }

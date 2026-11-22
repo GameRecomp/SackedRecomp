@@ -189,16 +189,44 @@ void rc_register_imports(const rc_import_def *defs, uint32_t count)
     }
 }
 
+/* The slots by DLL and name: HLE code asks for addresses at run time (msvcrt for each ReadFile
+ * of an fread), and a search through every slot, comparing names, took most of a Sacked level's
+ * time. The hash is of what dll_eq and strcmp compare: the DLL without ".dll", in lower case,
+ * and the name as it is. */
+#define HASH_SIZE (IMPORT_MAX * 2u)
+static uint32_t by_name[HASH_SIZE]; /* slot + 1, 0 for none */
+
+static uint32_t name_hash(const char *dll, const char *name)
+{
+    uint32_t h = 2166136261u;
+    size_t n = strlen(dll);
+    if (n >= 4 && ieq(dll + n - 4, ".dll")) {
+        n -= 4;
+    }
+    for (size_t i = 0; i < n; i++) {
+        int x = (unsigned char)dll[i];
+        h = (h ^ (uint32_t)(x >= 'A' && x <= 'Z' ? x + 32 : x)) * 16777619u;
+    }
+    h = (h ^ 0x100u) * 16777619u;
+    for (const char *p = name; *p; p++) {
+        h = (h ^ (unsigned char)*p) * 16777619u;
+    }
+    return h;
+}
+
 uint32_t rc_import_address(const char *dll, const char *name)
 {
-    for (uint32_t i = 0; i < nslots; i++) {
-        if (dll_eq(slots[i].dll, dll) && strcmp(slots[i].name, name) == 0) {
+    uint32_t h = name_hash(dll, name) & (HASH_SIZE - 1);
+    for (; by_name[h]; h = (h + 1) & (HASH_SIZE - 1)) {
+        uint32_t i = by_name[h] - 1;
+        if (strcmp(slots[i].name, name) == 0 && dll_eq(slots[i].dll, dll)) {
             return IMPORT_BASE + IMPORT_STRIDE * i;
         }
     }
     if (nslots == IMPORT_MAX) {
         rc_fatal("too many imports");
     }
+    by_name[h] = nslots + 1;
     /* The names outlive the call: they come from the image or the registry. */
     slots[nslots].dll = dll;
     slots[nslots].name = name;
