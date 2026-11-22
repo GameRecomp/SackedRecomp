@@ -27,6 +27,9 @@
 extern "C" {
 #endif
 
+/* How long the turns rc_web_poll gave the browser took, in all (milliseconds). */
+double rc_web_turns_ms(void);
+
 /* Give the browser its turn if 16 ms have passed since the last time. */
 void rc_web_poll(void);
 

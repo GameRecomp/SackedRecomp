@@ -113,6 +113,9 @@ bool rc_clock_virtual(void);
 /* Microseconds on the host's monotonic clock, whatever RC_CLOCK says (for
  * measuring the runtime itself). */
 uint64_t rc_host_us(void);
+/* The host's time (microseconds) its own event loop took in the turns the runtime gave it (a
+ * browser's), in all; 0 where there are none. For RC_TRACE=fps. */
+uint64_t rc_host_turns_us(void);
 /* rc_ticks_ms without advancing the virtual clock. */
 uint64_t rc_ticks_peek_ms(void);
 /* A frame has been presented. With the virtual clock and RC_CLOCK_FPS=N, it

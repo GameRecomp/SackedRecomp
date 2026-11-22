@@ -17,7 +17,9 @@
 #include "ddraw.h"
 #include "rc/hle.h"
 #include "rc/hle_modules.h"
+#include "rc/hostfs.h"
 #include "rc/log.h"
+#include "rc/native.h"
 #include "rc/platform.h"
 #include "rc/process.h"
 #include "rc/thread.h"
@@ -438,7 +440,7 @@ bool rc_ddraw_has_primary(void) { return display.primary != 0; }
  * the wait for the display), resting for the frame limit, and the rest (the program's own work,
  * other threads, sound). */
 static struct {
-    uint64_t since, since_ms, convert, show, rest;
+    uint64_t since, since_ms, convert, show, rest, others0, turns0, mmx0, reads0;
     unsigned presented, drawn, changed;
 } fps_stat;
 
@@ -456,21 +458,34 @@ static void fps_tick(void)
     if (!fps_stat.since) {
         fps_stat.since = now;
         fps_stat.since_ms = now_ms;
+        fps_stat.others0 = rc_thread_others_us();
+        fps_stat.turns0 = rc_host_turns_us();
+        fps_stat.mmx0 = rc_native_mmx_calls();
+        fps_stat.reads0 = rc_host_freads();
         return;
     }
     if (now_ms - fps_stat.since_ms < 1000u) {
         return;
     }
     uint64_t span = now - fps_stat.since;
+    uint64_t others = rc_thread_others_us() - fps_stat.others0, turns = rc_host_turns_us() - fps_stat.turns0;
     uint64_t busy = span - fps_stat.convert - fps_stat.show - fps_stat.rest;
+    busy = busy > others + turns ? busy - others - turns : 0;
     rc_log("fps: %u presented, %u changed, %u drawn in %.2f s (host %.2f s); ms: convert %.0f, show %.0f, "
-           "frame limit %.0f, program %.0f",
+           "frame limit %.0f, other threads %.0f, host's turns %.0f, program %.0f",
            fps_stat.presented, fps_stat.changed, fps_stat.drawn, (double)(now_ms - fps_stat.since_ms) / 1e3,
            (double)span / 1e6, (double)fps_stat.convert / 1e3, (double)fps_stat.show / 1e3,
-           (double)fps_stat.rest / 1e3, (double)busy / 1e3);
+           (double)fps_stat.rest / 1e3, (double)others / 1e3, (double)turns / 1e3, (double)busy / 1e3);
+    rc_log("fps:   %llu MMX operations through the runtime, %llu host file reads",
+           (unsigned long long)(rc_native_mmx_calls() - fps_stat.mmx0),
+           (unsigned long long)(rc_host_freads() - fps_stat.reads0));
     memset(&fps_stat, 0, sizeof fps_stat);
     fps_stat.since = now;
     fps_stat.since_ms = now_ms;
+    fps_stat.others0 = rc_thread_others_us();
+    fps_stat.turns0 = rc_host_turns_us();
+    fps_stat.mmx0 = rc_native_mmx_calls();
+    fps_stat.reads0 = rc_host_freads();
 }
 
 /* The primary surface onto the window. */

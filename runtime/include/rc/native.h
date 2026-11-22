@@ -65,6 +65,9 @@ int rc_wasm_register(const uint8_t *tables, uint32_t size, uint32_t table_base);
 /* Give `c` the fields native code needs (call for every rc_cpu). */
 void rc_native_bind(rc_cpu *c);
 
+/* How many MMX operations native or WebAssembly code had the runtime do (RC_TRACE=fps). */
+uint64_t rc_native_mmx_calls(void);
+
 #ifdef __cplusplus
 }
 #endif

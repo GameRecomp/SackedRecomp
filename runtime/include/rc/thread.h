@@ -48,6 +48,10 @@ void rc_thread_work(void);
  * them come at uneven times. */
 void rc_thread_wait_frame(uint32_t ms);
 
+/* The host's time (microseconds) spent in threads other than the main one so far (a game's
+ * music thread), for RC_TRACE=fps. */
+uint64_t rc_thread_others_us(void);
+
 /* End the current thread with `code` (ExitThread); on the main thread, the
  * process. Does not return, except in a browser: there the thread's stack
  * cannot be left behind, so it returns with the thread's CPU unwinding

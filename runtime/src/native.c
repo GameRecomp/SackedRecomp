@@ -218,8 +218,12 @@ static void h_fpu(rc_cpu *c, uint32_t code, uint32_t a)
 
 /* One MMX operation by its index in rc_ir::MmxOp (rc/mmx.h, RC_MMX_OPS). */
 typedef uint64_t (*mmx_fn)(uint64_t, uint64_t);
+static uint64_t mmx_calls;
+uint64_t rc_native_mmx_calls(void) { return mmx_calls; }
+
 static uint64_t h_mmx(rc_cpu *c, uint32_t op, uint64_t a, uint64_t b)
 {
+    mmx_calls++;
 #define ENTRY(name) rc_mmx_##name,
     static const mmx_fn ops[] = {RC_MMX_OPS(ENTRY)};
 #undef ENTRY

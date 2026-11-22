@@ -35,6 +35,8 @@ uint8_t *rc_host_read(const char *path, uint32_t *size);
  * read needs from its storage (rc/web.h); every read of game files goes
  * through it. */
 size_t rc_host_fread(void *buf, size_t n, FILE *f);
+/* How many rc_host_fread calls there were (RC_TRACE=fps). */
+uint64_t rc_host_freads(void);
 
 #ifdef __cplusplus
 }

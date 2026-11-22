@@ -187,8 +187,12 @@ uint8_t *rc_host_read(const char *path, uint32_t *size)
     return buf;
 }
 
+static uint64_t freads;
+uint64_t rc_host_freads(void) { return freads; }
+
 size_t rc_host_fread(void *buf, size_t n, FILE *f)
 {
+    freads++;
     if (n == 0) {
         return 0;
     }

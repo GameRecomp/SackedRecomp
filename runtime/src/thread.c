@@ -174,11 +174,27 @@ static void pass_baton(uint32_t next, bool wait)
 #endif
 
 /* Run `next`; return when this thread is chosen again. */
+/* RC_TRACE=fps: the host's time in threads other than the main one, counted at every switch
+ * (each stretch ends with a switch away from the thread that ran it). */
+static uint64_t others_us, stretch_from;
+
+static void account(void)
+{
+    uint64_t now = rc_host_us();
+    if (current != 0 && stretch_from) {
+        others_us += now - stretch_from;
+    }
+    stretch_from = now;
+}
+
+uint64_t rc_thread_others_us(void) { return others_us; }
+
 static void switch_to(uint32_t next)
 {
     if (next == current) {
         return;
     }
+    account();
 #if BACKEND_FIBERS
     current = next;
     SwitchToFiber(threads[next].fiber);
@@ -353,6 +369,7 @@ void rc_thread_exit(uint32_t code)
 static void finish(uint32_t code)
 {
     thread *t = &threads[current];
+    account();
     t->exit_code = code;
     t->state = T_DONE;
     if (rc_trace("threads")) {

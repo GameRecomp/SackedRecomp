@@ -116,6 +116,15 @@ uint64_t rc_host_us(void)
 #endif
 }
 
+uint64_t rc_host_turns_us(void)
+{
+#if defined(__EMSCRIPTEN__)
+    return (uint64_t)(rc_web_turns_ms() * 1000.0);
+#else
+    return 0;
+#endif
+}
+
 uint64_t rc_ticks_peek_ms(void)
 {
     if (is_virtual()) {
