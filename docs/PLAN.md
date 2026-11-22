@@ -206,10 +206,13 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 - [x] 800x600x16 DirectDraw 7, the games' own cursors
 - [x] `DirectInputCreateEx` with `IDirectInput7::CreateDeviceEx`; the mouse moves the games' own pointer by
       relative motion, buttons light up only while the pointer moves over them
-- [x] The window catches the mouse (SDL's relative mode) while a game reads it through DirectInput; the motion
-      is the host mouse's own (raw, unscaled), so it goes on at the window's edge
-- [x] The frame limit (`fps` in `settings.ini`) paces the game's passes: a quiet level ran over 200 passes a
-      second; on a real display the level now runs at 60 (`RC_TRACE=fps`)
+- [x] An absolute mouse: each build's place of the game's own pointer (`games/*/patches.c`), and DirectInput
+      reports the way to the host's pointer, so the two are one (no catching of the mouse: tried, and it felt
+      wrong)
+- [x] The frame limit (`fps` in `settings.ini`) waits in `Flip`, as Windows does: Sacked times its passes from
+      Flip to Flip, and waiting elsewhere slowed its world to a third; a level runs at 60 frames, with 17 to
+      20 new pictures a second (`RC_TRACE=fps`)
+- [x] Import addresses by hash: the search through every import took over half of a level's time
 - [x] `GetKeyboardLayout`, `MapVirtualKeyExA`, `ToAsciiEx` (US layout)
 - [x] `AddFontResourceA` (`International.ttf`, its family name), a fallback font for characters a game's font
       lacks; code pages by language (1250 Polish and Hungarian, 1251 Russian) for GDI text and `GetACP`

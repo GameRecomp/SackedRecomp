@@ -76,6 +76,12 @@ Whether the localised game builds differ in code beyond their texts is **(open)*
 - In a quiet level Sacked flips about 200 times a second when nothing holds it back, and its picture changes
   only when something on it moves (some ten times a second with nobody walking; every frame while the pointer
   moves). Its clock runs by `GetTickCount`, the same at 60 and at 240 passes a second.
+- Sacked times its passes with a stopwatch on `rdtsc`, calibrated at start against `GetTickCount` (2 s of
+  busy waiting): 1 GHz with our counter. The pass is measured from Flip to Flip.
+- Each build keeps the game's own pointer as two 32-bit integers (x, y) in its data: Gefeuert.exe
+  `0x47e30c`, sacked.exe (English, Hungarian, Russian) `0x47e36c`, the Polish `0x47bf0c`, Ontslagen.exe
+  `0x478e0c`; crazyschool.exe `0x467c74` (German), `0x455104` (Russian), CRAZYSCHOOL.exe `0x4c4dec`. Found by
+  moving the pointer by script and comparing two snapshots of the image.
 - Both games create the DirectInput mouse with `DISCL_FOREGROUND | DISCL_NONEXCLUSIVE` and read it with
   `GetDeviceState` (accumulated motion); only the keyboard is buffered (32 events).
 - The `crazyschool firstlevel` scenario passes with its accepted screenshot, but its call sequence now has three
