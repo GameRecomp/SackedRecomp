@@ -34,6 +34,8 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+mod flags;
+
 use rc_ir::{
     BinOp as B, Expr as E, FArith, FBinary, FConst, FLoc, FUnary, Flag, Fpu, Function, Helper,
     Part, Reg, Stmt as S, Term, UnOp as U, W,
@@ -81,12 +83,15 @@ pub struct Options {
     /// The flags cross function boundaries: stored into `c` at every return
     /// and read back after every call. On by default.
     pub flags_at_return: bool,
+    /// Leave out the flag settings nothing reads (see `flags.rs`). On by default.
+    pub prune_flags: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Options {
             flags_at_return: true,
+            prune_flags: true,
         }
     }
 }
@@ -388,6 +393,8 @@ struct Emitter<'a> {
     case: u32,
     frames: Vec<Frame>,
     trap_no: u32,
+    /// The flag settings left out, by instruction and statement (`flags::dead_settings`).
+    dead: Vec<Vec<bool>>,
 }
 
 impl<'a> Emitter<'a> {
@@ -405,6 +412,7 @@ impl<'a> Emitter<'a> {
             case: 0,
             frames: Vec::new(),
             trap_no: 0,
+            dead: Vec::new(),
         }
     }
 
@@ -1342,6 +1350,11 @@ impl<'a> Emitter<'a> {
             .map(|(k, &a)| (a, k as u32))
             .collect();
         let n = self.cases.len() as u32;
+        if self.cx.opts.prune_flags {
+            let index = &self.cx.index;
+            self.dead =
+                flags::dead_settings(f, |a| index.contains_key(&a), self.cx.opts.flags_at_return);
+        }
 
         self.i()
             .local_get(L_C)
@@ -1378,7 +1391,11 @@ impl<'a> Emitter<'a> {
                 self.case = c;
             }
             self.trap_no = 0;
-            self.stmts(&ins.stmts, ins.addr);
+            for (i, s) in ins.stmts.iter().enumerate() {
+                if !self.dead.get(k).is_some_and(|d| d[i]) {
+                    self.stmt(s, ins.addr);
+                }
+            }
             let next = ins.next();
             let next_emitted = f.insns.get(k + 1).map(|n| n.addr);
             match &ins.term {

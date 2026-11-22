@@ -155,6 +155,7 @@ fn real_main() -> Result<bool, String> {
                 &addrs,
                 rc_emit_wasm::Options {
                     flags_at_return: true,
+                    prune_flags: true,
                 },
             );
             let compiled = funcs
