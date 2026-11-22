@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "rc/hle_modules.h"
 #include "rc/log.h"
 #include "rc/platform.h"
 #include "rc/process.h"
@@ -158,8 +159,10 @@ static void observe(const rc_event *e)
         break;
     }
     case RC_EV_MOUSE_MOVE:
-        if (last_x >= 0) {
-            int dx = e->x - last_x, dy = e->y - last_y;
+        if (e->has_motion || last_x >= 0) {
+            /* The mouse's own motion where the host has it (it goes on at the window's edge and
+             * is not scaled with the picture), else how far the pointer moved (scripts). */
+            int dx = e->has_motion ? e->dx : e->x - last_x, dy = e->has_motion ? e->dy : e->y - last_y;
             mouse_dx += dx;
             mouse_dy += dy;
             if (dx) {
@@ -190,6 +193,23 @@ static void observe(const rc_event *e)
         break;
     default:
         break;
+    }
+}
+
+/* The window catches the mouse while the program reads it here and shows its picture through
+ * DirectDraw (a full-screen game, which draws its own pointer from the mouse's motion): on
+ * Windows that motion goes on at the screen's edge and the pointer never leaves the game. */
+static void update_capture(void)
+{
+    static bool captured;
+    bool want = false;
+    for (uint32_t i = 1; i < OBJECTS && !want; i++) {
+        want = objects[i].kind == K_MOUSE && objects[i].acquired;
+    }
+    want = want && rc_ddraw_has_primary();
+    if (want != captured) {
+        captured = want;
+        rc_plat_mouse_capture(want);
     }
 }
 
@@ -239,6 +259,7 @@ static void m_Release(rc_cpu *c)
     uint32_t r = o->refs ? --o->refs : 0;
     if (!r) {
         o->kind = K_FREE;
+        update_capture();
     }
     RC_RETURN(c, r, 1);
 }
@@ -311,6 +332,9 @@ static void d_SetProperty(rc_cpu *c)
         uint32_t n = rc_ld32(RC_ARG(c, 2) + 16);
         o->buffer = n > EVENTS ? EVENTS : n;
         o->head = o->tail = 0;
+        if (rc_trace("dinput")) {
+            rc_log("dinput: %s buffers %u events", o->kind == K_MOUSE ? "mouse" : "keyboard", n);
+        }
     }
     RC_RETURN(c, DI_OK, 3);
 }
@@ -332,6 +356,7 @@ static void d_Acquire(rc_cpu *c)
         mouse_dx = mouse_dy = mouse_dz = 0;
     }
     o->acquired = true;
+    update_capture();
     RC_RETURN(c, DI_OK, 1);
 }
 
@@ -340,6 +365,7 @@ static void d_Unacquire(rc_cpu *c)
     object *o = self(c);
     o->acquired = false;
     o->head = o->tail = 0;
+    update_capture();
     RC_RETURN(c, DI_OK, 1);
 }
 
@@ -354,6 +380,7 @@ static void d_GetDeviceState(rc_cpu *c)
     if (o->kind == K_KEYBOARD) {
         memcpy(rc_ptr(p), keyboard, n < 256 ? n : 256);
     } else {
+        update_capture(); /* (the display may have come after Acquire) */
         /* DIMOUSESTATE (16 bytes) or DIMOUSESTATE2 (20). */
         if (n < 16) {
             RC_RETURN(c, DIERR_INVALIDPARAM, 3);

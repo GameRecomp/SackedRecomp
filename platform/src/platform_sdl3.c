@@ -28,6 +28,7 @@ static SDL_Window *window;
 static SDL_Renderer *renderer;
 /* Whether the window is to be seen; asked before it exists, it is shown when it is made. */
 static bool window_shown;
+static bool mouse_captured; /* rc_plat_mouse_capture */
 static SDL_Texture *texture;
 static int frame_w = 640, frame_h = 480;
 static rc_display display = {0, false, false, 0, 0, 0, 10, true};
@@ -253,6 +254,9 @@ bool rc_plat_window(int width, int height)
             return false;
         }
         SDL_SetRenderVSync(renderer, 1);
+        if (mouse_captured) {
+            SDL_SetWindowRelativeMouseMode(window, true);
+        }
 #if !defined(SDL_PLATFORM_EMSCRIPTEN)
         if (display.fullscreen) {
             SDL_SetWindowFullscreen(window, true);
@@ -296,6 +300,14 @@ void rc_plat_title(const char *title)
     SDL_strlcpy(title_buf, title, sizeof title_buf);
     if (window) {
         SDL_SetWindowTitle(window, full_title());
+    }
+}
+
+void rc_plat_mouse_capture(bool on)
+{
+    mouse_captured = on;
+    if (window) {
+        SDL_SetWindowRelativeMouseMode(window, on);
     }
 }
 
@@ -813,6 +825,18 @@ static bool poll_sdl(rc_event *e)
 {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
+        /* The motion in the host's pixels, before it is scaled to the frame; what is left of a
+         * pixel is kept for the next move. */
+        static float rest_x, rest_y;
+        int move_x = 0, move_y = 0;
+        if (ev.type == SDL_EVENT_MOUSE_MOTION) {
+            rest_x += ev.motion.xrel;
+            rest_y += ev.motion.yrel;
+            move_x = (int)rest_x;
+            move_y = (int)rest_y;
+            rest_x -= (float)move_x;
+            rest_y -= (float)move_y;
+        }
         if (renderer) {
             SDL_ConvertEventToRenderCoordinates(renderer, &ev);
         }
@@ -861,6 +885,11 @@ static bool poll_sdl(rc_event *e)
             e->source = source_of(ev.motion.which);
             e->x = (int)ev.motion.x;
             e->y = (int)ev.motion.y;
+            if (e->source == RC_SRC_MOUSE) {
+                e->dx = move_x;
+                e->dy = move_y;
+                e->has_motion = true;
+            }
             last_x = ev.motion.x;
             last_y = ev.motion.y;
             if (e->source == RC_SRC_TOUCH && !touch_pointer(e)) {
