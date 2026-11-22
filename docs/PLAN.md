@@ -86,7 +86,7 @@ Status: ✅ done · 🔶 in progress · ⬜ not started
 | M2  | Find the code                      | ✅ | Coverage report for all 20 pinned binaries: 100 % classified, every leftover settled by analysis or a manifest hint. |
 | M3  | Lift and build                     | ✅ | Every function lifts; no trap in reachable code; the generated C compiles warning-free (gcc, clang, MSVC in CI) and links into `sacked-sacked` and `sacked-crazyschool`. |
 | M4a | Crazy School boots                 | ✅ | CRT start-up, registry, files, threads; the game creates its window and sets a DirectDraw 7 mode. |
-| M4b | C runtime and Sacked boots         | 🔶 | `hle/msvcrt` and `hle/msvcp60` serve every import of the binaries that link them; C++ exceptions are thrown and caught (unit tests); Sacked reaches its window and display mode. |
+| M4b | C runtime and Sacked boots         | ✅ | `hle/msvcrt` and `hle/msvcp60` serve every import of the binaries that link them; C++ exceptions are thrown and caught (unit tests); Sacked reaches its window and display mode. |
 | M5  | Picture and input                  | 🔶 | Both main menus render; mouse and keyboard (DirectInput 7 and window messages) work; text in `International.ttf`; windowed and full screen. |
 | M6  | Sound and music                    | 🔶 | DirectSound effects and speech (WAV through mmio), Ogg music through the lifted Vorbis DLLs. |
 | M7  | In game                            | 🔶 | Every level of both games can be played through (German first, then each language starts and plays a level); high scores and progress are saved and loaded; scripted soak runs (`tools/run-scenario`) without trap. |
@@ -196,7 +196,10 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
       storage (`GetProcAddress` answers as Windows XP), `GetCommandLineW`,
       `InitializeCriticalSectionAndSpinCount`
 - [x] Every release of both games reaches its main menu
-- [ ] Unit tests for the C++ EH paths with small lifted fixtures (none of the paths has been seen in a run yet)
+- [x] Unit tests for the C++ EH paths (`hle/tests/test_eh.c`, ctest `hle`): VC6 frames and tables by hand,
+      thrown through kernel32's dispatcher: catch by value (copy constructor), by base-class reference, `catch
+      (...)` of a Win32 exception, `throw;` caught further out (the object destroyed once), `__try`/`__finally`
+      inside `__try`/`__except`, a filter that resumes
 
 ### M5 – Picture and input
 

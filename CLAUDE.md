@@ -8,13 +8,13 @@ decision log), `docs/RESEARCH.md` and `docs/TARGETS.md`.
 
 ## State (2026-11-22)
 
-M0, M1, M3 done; M2, M4–M8 well along. Every pinned release of both games (Sacked: German CD, English,
+M0–M3 and M4 done; M5–M8 well along. Every pinned release of both games (Sacked: German CD, English,
 Hungarian, Polish, Dutch, Russian; Crazy School: German CD, Russian, Polish) is unpacked by `recomp extract`,
 lifted, built and reaches its main menu; the German versions of both games start their first level
 (`tools/run-scenario sacked firstlevel`, `crazyschool firstlevel`). `recomp convert --system linux` makes a
-native build that runs. The converter page offers the languages as flags and downloads the release from
-archive.org (`/cors/`). Next: play levels through, the browser build (Emscripten), Windows, the Polish Crazy
-School's last 20 KB of discovery, C++ EH unit tests (see `docs/PLAN.md`).
+native build that runs; in Firefox the converter page converts both German games and the player runs them. The
+page offers the languages as flags and downloads the release from archive.org (`/cors/`). Next: play levels
+through, sound and windowed/fullscreen checked by hand, CI and release packages (see `docs/PLAN.md`).
 
 ```sh
 CMAKE_PREFIX_PATH=<your SDL3 prefix> cmake --preset dev && cmake --build --preset dev    # unpacks, lifts, builds
