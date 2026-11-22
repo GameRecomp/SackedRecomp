@@ -248,9 +248,26 @@ const NORETURN_IMPORTS: &[&str] = &[
     "msvcrt.dll!_exit",
     "msvcrt.dll!abort",
     "msvcrt.dll!_CxxThrowException",
+    "msvcrt.dll!?terminate@@YAXXZ",
+    "msvcrt.dll!_amsg_exit",
     "msvcrt.dll!longjmp",
     "user32.dll!ExitWindowsEx",
 ];
+
+/// Whether the import `dll!name` never returns. The C runtime's entries count for every
+/// version of it (`msvcrt.dll`, `msvcr71.dll`, …).
+fn is_noreturn_import(n: &str) -> bool {
+    NORETURN_IMPORTS.iter().any(|x| x.eq_ignore_ascii_case(n))
+        || n.split_once('!').is_some_and(|(dll, f)| {
+            let dll = dll.to_ascii_lowercase();
+            dll.starts_with("msvcr")
+                && dll.ends_with(".dll")
+                && NORETURN_IMPORTS
+                    .iter()
+                    .filter_map(|x| x.strip_prefix("msvcrt.dll!"))
+                    .any(|x| x == f)
+        })
+}
 
 /// The MSVC C++ exception code (`'msc' | 0xE0000000`).
 const MSC_EXCEPTION: u32 = 0xE06D_7363;
@@ -821,10 +838,7 @@ impl<'a> Engine<'a> {
     }
 
     pub fn import_noret(&self, slot: u32) -> bool {
-        self.img
-            .imports
-            .get(&slot)
-            .is_some_and(|n| NORETURN_IMPORTS.iter().any(|x| x.eq_ignore_ascii_case(n)))
+        self.img.imports.get(&slot).is_some_and(|n| is_noreturn_import(n))
     }
 
     fn classify(
@@ -1093,8 +1107,9 @@ impl<'a> Engine<'a> {
         }
         let mut idx_range = None;
         let (count, kind) = match bound {
+            // (A hint's count bounds the index table when there is one.)
             Some((n, k)) if n > 0 && n <= 4096 => match index_table {
-                Some(bt) if k != Bound::Hint => {
+                Some(bt) => {
                     let mut max = 0u32;
                     for j in 0..n {
                         let Some(b) = self.img.byte(bt.wrapping_add(j)) else {
