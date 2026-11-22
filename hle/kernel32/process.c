@@ -302,6 +302,14 @@ static void k_InitializeCriticalSection(rc_cpu *c)
     RC_RETURN(c, 0, 1);
 }
 
+/* InitializeCriticalSectionAndSpinCount(section, spin count): spinning means nothing here. */
+static void k_InitializeCriticalSectionAndSpinCount(rc_cpu *c)
+{
+    memset(rc_ptr(RC_ARG(c, 0)), 0, 24);
+    rc_st32(RC_ARG(c, 0) + 4, 0xffffffffu);
+    RC_RETURN(c, 1, 2);
+}
+
 static void k_CriticalSectionNop(rc_cpu *c) { RC_RETURN(c, 0, 1); }
 
 static void k_InterlockedIncrement(rc_cpu *c)
@@ -975,6 +983,7 @@ const rc_import_def rc_k32_process[] = {
     {K32, "TlsGetValue", k_TlsGetValue},
     {K32, "TlsSetValue", k_TlsSetValue},
     {K32, "InitializeCriticalSection", k_InitializeCriticalSection},
+    {K32, "InitializeCriticalSectionAndSpinCount", k_InitializeCriticalSectionAndSpinCount},
     {K32, "DeleteCriticalSection", k_CriticalSectionNop},
     {K32, "EnterCriticalSection", k_CriticalSectionNop},
     {K32, "LeaveCriticalSection", k_CriticalSectionNop},
