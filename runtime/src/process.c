@@ -215,6 +215,7 @@ static rc_module *load_image(const char *name, const uint8_t *file, uint32_t siz
     uint32_t image_size = rd32(file, opt + 56);
     uint32_t headers = rd32(file, opt + 60);
     uint32_t imports = rd32(file, opt + 96 + 8);
+    uint32_t page = rd32(file, opt + 32) ? rd32(file, opt + 32) : 0x1000;
 
     if (rc_vm_alloc(base, image_size, true) != base) {
         rc_fatal("cannot place %s at %#010x", name, base);
@@ -224,7 +225,10 @@ static rc_module *load_image(const char *name, const uint8_t *file, uint32_t siz
         uint32_t h = opt + optsize + 40 * i;
         uint32_t vsize = rd32(file, h + 8), rva = rd32(file, h + 12);
         uint32_t raw = rd32(file, h + 16), off = rd32(file, h + 20);
-        uint32_t n = raw < vsize || vsize == 0 ? raw : vsize;
+        /* Windows maps whole pages: the file's bytes after the virtual size up to the end of
+         * the section's last page are there too (code lives there in a patched build). */
+        uint32_t span = vsize ? (vsize + page - 1) / page * page : raw;
+        uint32_t n = raw < span ? raw : span;
         if (off + n > size || rva + n > image_size) {
             rc_fatal("%s: section %u out of range", name, i);
         }

@@ -62,19 +62,24 @@ pub struct Section {
     pub raw_offset: u32,
     pub raw_size: u32,
     pub characteristics: u32,
+    /// The image's section alignment (the page size the loader maps sections in).
+    pub alignment: u32,
 }
 
 impl Section {
     pub fn is_executable(&self) -> bool {
         self.characteristics & IMAGE_SCN_MEM_EXECUTE != 0
     }
-    /// Size the section occupies in memory (MSVC sometimes leaves `virtual_size` zero).
+    /// Size the section occupies in memory (MSVC sometimes leaves `virtual_size` zero). Windows
+    /// maps whole pages, so the file's bytes after `virtual_size` up to the end of its last page
+    /// are there too (1C's patch to the Russian Crazy School keeps code and a table there).
     pub fn mapped_size(&self) -> u32 {
         if self.virtual_size == 0 {
-            self.raw_size
-        } else {
-            self.virtual_size
+            return self.raw_size;
         }
+        let page = self.alignment.max(1);
+        let page_end = self.virtual_size.div_ceil(page).saturating_mul(page);
+        self.virtual_size.max(self.raw_size.min(page_end))
     }
     pub fn contains_rva(&self, rva: u32) -> bool {
         rva >= self.virtual_address && rva - self.virtual_address < self.mapped_size()
@@ -227,6 +232,7 @@ pub fn parse(data: &[u8]) -> Result<Pe> {
         *d = (r.u32(opt + 96 + 8 * i)?, r.u32(opt + 100 + 8 * i)?);
     }
 
+    let section_alignment = r.u32(opt + 32)?;
     let sec_table = opt + opt_size;
     let mut sections = Vec::with_capacity(nsections);
     for i in 0..nsections {
@@ -240,6 +246,7 @@ pub fn parse(data: &[u8]) -> Result<Pe> {
             raw_size: r.u32(o + 16)?,
             raw_offset: r.u32(o + 20)?,
             characteristics: r.u32(o + 36)?,
+            alignment: section_alignment,
         });
     }
 
