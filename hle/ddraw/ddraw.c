@@ -1423,6 +1423,20 @@ static void k_GetAvailableVidMem(rc_cpu *c)
     RC_RETURN(c, DD_OK, 4);
 }
 
+/* IDirectDraw7::TestCooperativeLevel: the display is always ours. */
+static void k_TestCooperativeLevel(rc_cpu *c)
+{
+    self(c, O_DDRAW);
+    RC_RETURN(c, DD_OK, 1);
+}
+
+/* IDirectDraw7::RestoreAllSurfaces: surfaces are never lost. */
+static void k_RestoreAllSurfaces(rc_cpu *c)
+{
+    self(c, O_DDRAW);
+    RC_RETURN(c, DD_OK, 1);
+}
+
 static void k_WaitForVerticalBlank(rc_cpu *c)
 {
     self(c, O_DDRAW);
@@ -1519,6 +1533,8 @@ const rc_import_def rc_ddraw_defs[] = {
     M("IDirectDraw", "SetDisplayMode", k_SetDisplayMode),
     M("IDirectDraw", "WaitForVerticalBlank", k_WaitForVerticalBlank),
     M("IDirectDraw", "GetAvailableVidMem", k_GetAvailableVidMem),
+    M("IDirectDraw", "TestCooperativeLevel", k_TestCooperativeLevel),
+    M("IDirectDraw", "RestoreAllSurfaces", k_RestoreAllSurfaces),
 
     M("IDirectDrawSurface", "QueryInterface", k_SurfaceQueryInterface),
     M("IDirectDrawSurface", "AddRef", k_AddRef),
