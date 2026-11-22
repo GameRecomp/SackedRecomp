@@ -88,6 +88,19 @@ Whether the localised game builds differ in code beyond their texts is **(open)*
   more `GetTickCount` early in the run than the accepted one, already before the frame-pacing and mouse
   changes; the cause is **(open)**.
 
+## Speed in a browser
+
+- Measured with `RC_TRACE=fps` in Firefox (`play.html?game=sacked&trace=fps`), Sacked's first level:
+  - Sacked blends its whole screen with MMX, about a million MMX operations a frame. Each was a call from the
+    game's WebAssembly into the runtime; that was most of a frame's ~12 ms. `rc-emit-wasm` now emits them
+    inline with WebAssembly SIMD.
+  - The msvcrt replacement read every small binary `fread` from the host (800,000 reads into the first
+    level); in a browser each is a trip through JavaScript, and the level fell to ~25 frames a second while
+    it read. `fread` now goes through a 4 KiB-filled buffer as MSVCRT's does (20,000 reads).
+  - Flag settings nothing reads are left out of the WebAssembly (the module shrinks from 17.0 to 12.6 MB); no
+    measurable change in the frame time on its own.
+  - After that: 57 to 60 frames a second in the level, the game's own work about 7 ms a frame.
+
 ## The browser download
 
 - Both files are served by archive.org through a redirect (`archive.org/download/<item>/<file>` → a mirror
