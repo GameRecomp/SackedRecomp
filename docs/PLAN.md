@@ -235,8 +235,8 @@ replacing `vorbisfile` with a native decoder keeps the code faithful and avoids 
 - [x] `recomp convert --system linux` from the German Sacked: the native (Cranelift) build reaches the menu
 - [x] The release's name travels with its files (`recomp-variant.txt`), for the language and code page
 - [x] The browser: the web shells build (Emscripten 7.0.0); in Firefox the page converts the German Sacked in
-      9 seconds (6802 functions as WebAssembly, the files into the browser's storage) and the player runs it to
-      the main menu
+      9 seconds (6802 functions as WebAssembly, the files into the browser's storage), the German Crazy School
+      in 8 seconds (2615 functions), and the player runs both to their main menus
 - [x] Windows: `tools/check-windows` (MinGW, the runtime tests under Wine) passes
 - [ ] Windows packages and the CI workflows on GitHub (nothing pushed yet)
 - [ ] All three start and reach a level

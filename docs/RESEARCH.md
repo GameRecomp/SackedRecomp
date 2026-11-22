@@ -68,6 +68,10 @@ Whether the localised game builds differ in code beyond their texts is **(open)*
   a redirect: the page downloads from there. A `Range` header makes the browser ask first (preflight), which
   fails; whole files are fetched. Measured: the Polish Crazy School installer (62 MB) took 4 minutes through
   `/cors/` from a headless Firefox, against 11 seconds through `/download/` with curl.
+- Testing the player headless: the canvas is WebGL without `preserveDrawingBuffer`, so `toDataURL` reads an
+  empty (transparent) buffer unless a frame was drawn in the same task. Sacked's menu animates and is caught by
+  chance; Crazy School's menu is static (unchanged frames are not presented again) and reads as empty. A test
+  page forces `preserveDrawingBuffer` through `HTMLCanvasElement.prototype.getContext` before the start.
 
 ## Gefeuert.exe (Sacked, German)
 
