@@ -223,10 +223,11 @@ void rc_rdtsc(uint32_t *eax, uint32_t *edx)
     struct timespec ts;
     uint64_t t = 0;
     if (rc_clock_virtual()) {
-        /* On the virtual clock its time, and a step per reading so that it
-         * always moves on: a run repeats. */
+        /* On the virtual clock its time, which a reading moves on as any clock reading does (a
+         * game that times itself only by the time-stamp counter, as Sacked does, would
+         * otherwise stand still), and a step within the millisecond so that it always grows. */
         static uint64_t reads;
-        t = rc_ticks_peek_ms() * 1000000u + (++reads % 1000000u);
+        t = rc_ticks_ms() * 1000000u + (++reads % 1000000u);
         *eax = (uint32_t)t;
         *edx = (uint32_t)(t >> 32);
         return;
