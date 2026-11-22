@@ -17,10 +17,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "kernel32/k32.h"
 #include "rc/audio.h"
 #include "rc/hostfs.h"
 #include "rc/log.h"
 #include "rc/process.h"
+#include "rc/vm.h"
 #include "user32/user32.h"
 
 #define WMM "WINMM.dll"
@@ -383,21 +385,263 @@ static void k_nodriver1(rc_cpu *c) { RC_RETURN(c, MMSYSERR_NODRIVER, 1); }
 static void k_nodriver3(rc_cpu *c) { RC_RETURN(c, MMSYSERR_NODRIVER, 3); }
 static void k_nodriver5(rc_cpu *c) { RC_RETURN(c, MMSYSERR_NODRIVER, 5); }
 
-/* mmio: these games import the RIFF reading functions but not mmioOpen, so no file is ever
- * open; every call reports an error. */
+/* ---- mmio: RIFF files for reading (the WAV files of DirectSound samples) ----
+ *
+ * A file opened for reading is read whole into host memory. The program reads through mmioRead,
+ * or straight from the I/O buffer (mmioGetInfo, mmioAdvance, mmioSetInfo, as the DirectX SDK's
+ * wave reader does); the buffer is in guest memory. Chunks are found with mmioDescend and left
+ * with mmioAscend. Writing is not supported. */
+#define MMIOERR_CANNOTOPEN 257u
 #define MMIOERR_CANNOTREAD 263u
-static void k_mmio_err2(rc_cpu *c) { RC_RETURN(c, MMIOERR_CANNOTREAD, 2); }
-static void k_mmio_err3(rc_cpu *c) { RC_RETURN(c, MMIOERR_CANNOTREAD, 3); }
-static void k_mmio_err4(rc_cpu *c) { RC_RETURN(c, MMIOERR_CANNOTREAD, 4); }
-static void k_mmioSeek(rc_cpu *c) { RC_RETURN(c, 0xffffffffu, 3); }
+#define MMIOERR_CHUNKNOTFOUND 265u
+#define MMIO_ALLOCBUF 0x00010000u
+#define MMIO_RWMODE 0x00000003u
+#define MMIO_FINDCHUNK 0x0010u
+#define MMIO_FINDRIFF 0x0020u
+#define MMIO_FINDLIST 0x0040u
+#define FOURCC(a, b, c, d) ((uint32_t)(a) | (uint32_t)(b) << 8 | (uint32_t)(c) << 16 | (uint32_t)(d) << 24)
+
+#define MMIO_FILES 16
+static struct mmio_file {
+    uint8_t *data;
+    uint32_t size, pos;
+    uint32_t buf, cap;      /* the guest I/O buffer and its size (0: unbuffered) */
+    uint32_t buf_off, buf_len;
+    bool open;
+} mmio_files[MMIO_FILES];
+
+static struct mmio_file *mmio_get(uint32_t h)
+{
+    return h && h <= MMIO_FILES && mmio_files[h - 1].open ? &mmio_files[h - 1] : NULL;
+}
+
+/* The buffer no longer matches the position (after a read, seek or chunk move). */
+static void mmio_reset(struct mmio_file *f)
+{
+    f->buf_off = f->pos;
+    f->buf_len = 0;
+}
+
+/* mmioOpenA(name, info, flags) */
+static void k_mmioOpenA(rc_cpu *c)
+{
+    uint32_t name = RC_ARG(c, 0), info = RC_ARG(c, 1), flags = RC_ARG(c, 2);
+    char rel[512], host[1024];
+    uint32_t err = 0, h = 0;
+    if (!name || (flags & MMIO_RWMODE) != 0) {
+        err = MMIOERR_CANNOTOPEN; /* by I/O procedure or for writing: not supported */
+    } else if (!rc_k32_guest_rel(rc_str(name), rel, sizeof rel) ||
+               !rc_k32_find_existing(rel, host, NULL, NULL)) {
+        err = MMIOERR_CANNOTOPEN;
+    } else {
+        for (uint32_t i = 0; i < MMIO_FILES && !h; i++) {
+            if (!mmio_files[i].open) {
+                h = i + 1;
+            }
+        }
+        uint32_t size = 0;
+        uint8_t *data = h ? rc_host_read(host, &size) : NULL;
+        if (!data) {
+            err = MMIOERR_CANNOTOPEN;
+            h = 0;
+        } else {
+            struct mmio_file *f = &mmio_files[h - 1];
+            memset(f, 0, sizeof *f);
+            f->open = true;
+            f->data = data;
+            f->size = size;
+            if (flags & MMIO_ALLOCBUF) {
+                f->cap = info && rc_ld32(info + 20) ? rc_ld32(info + 20) : 8192;
+                f->buf = rc_heap_alloc(f->cap, true);
+            } else if (info && rc_ld32(info + 24) && rc_ld32(info + 20)) {
+                f->cap = rc_ld32(info + 20);
+                f->buf = rc_ld32(info + 24);
+            }
+        }
+    }
+    if (info) {
+        rc_st32(info + 12, err);
+    }
+    RC_RETURN(c, h, 3);
+}
+
+static void k_mmioClose(rc_cpu *c)
+{
+    struct mmio_file *f = mmio_get(RC_ARG(c, 0));
+    if (!f) {
+        RC_RETURN(c, MMIOERR_CANNOTREAD, 2);
+    }
+    free(f->data);
+    f->open = false;
+    RC_RETURN(c, 0, 2);
+}
+
+/* mmioRead(h, buffer, n): the bytes read, 0 at the end, -1 on error. */
+static void k_mmioRead(rc_cpu *c)
+{
+    struct mmio_file *f = mmio_get(RC_ARG(c, 0));
+    int32_t n = (int32_t)RC_ARG(c, 2);
+    if (!f || n < 0) {
+        RC_RETURN(c, 0xffffffffu, 3);
+    }
+    uint32_t left = f->pos < f->size ? f->size - f->pos : 0;
+    uint32_t k = (uint32_t)n < left ? (uint32_t)n : left;
+    memcpy(rc_ptr(RC_ARG(c, 1)), f->data + f->pos, k);
+    f->pos += k;
+    mmio_reset(f);
+    RC_RETURN(c, k, 3);
+}
+
+/* mmioSeek(h, offset, origin): the new position. */
+static void k_mmioSeek(rc_cpu *c)
+{
+    struct mmio_file *f = mmio_get(RC_ARG(c, 0));
+    int32_t off = (int32_t)RC_ARG(c, 1);
+    uint32_t origin = RC_ARG(c, 2);
+    if (!f || origin > 2) {
+        RC_RETURN(c, 0xffffffffu, 3);
+    }
+    int64_t base = origin == 0 ? 0 : origin == 1 ? (int64_t)f->pos : (int64_t)f->size;
+    int64_t to = base + off;
+    if (to < 0) {
+        RC_RETURN(c, 0xffffffffu, 3);
+    }
+    f->pos = (uint32_t)to;
+    mmio_reset(f);
+    RC_RETURN(c, f->pos, 3);
+}
+
+/* The MMIOINFO the program sees for `f`. */
+static void mmio_fill_info(struct mmio_file *f, uint32_t h, uint32_t info)
+{
+    memset(rc_ptr(info), 0, 72);
+    rc_st32(info + 20, f->cap);
+    rc_st32(info + 24, f->buf);
+    rc_st32(info + 28, f->buf + (f->pos - f->buf_off));
+    rc_st32(info + 32, f->buf + f->buf_len);
+    rc_st32(info + 36, f->buf + f->buf_len);
+    rc_st32(info + 40, f->buf_off);
+    rc_st32(info + 44, f->buf_off + f->buf_len);
+    rc_st32(info + 68, h);
+}
+
+static void k_mmioGetInfo(rc_cpu *c)
+{
+    uint32_t h = RC_ARG(c, 0);
+    struct mmio_file *f = mmio_get(h);
+    if (!f) {
+        RC_RETURN(c, MMIOERR_CANNOTREAD, 3);
+    }
+    mmio_fill_info(f, h, RC_ARG(c, 1));
+    RC_RETURN(c, 0, 3);
+}
+
+/* mmioSetInfo(h, info, flags): the program read up to info->pchNext. */
+static void k_mmioSetInfo(rc_cpu *c)
+{
+    struct mmio_file *f = mmio_get(RC_ARG(c, 0));
+    uint32_t info = RC_ARG(c, 1);
+    if (!f) {
+        RC_RETURN(c, MMIOERR_CANNOTREAD, 3);
+    }
+    if (f->buf) {
+        f->pos = f->buf_off + (rc_ld32(info + 28) - f->buf);
+    }
+    RC_RETURN(c, 0, 3);
+}
+
+/* mmioAdvance(h, info, flags): the next buffer, from where the program read to. */
+static void k_mmioAdvance(rc_cpu *c)
+{
+    uint32_t h = RC_ARG(c, 0), info = RC_ARG(c, 1);
+    struct mmio_file *f = mmio_get(h);
+    if (!f || !f->buf) {
+        RC_RETURN(c, MMIOERR_CANNOTREAD, 3);
+    }
+    if (info) {
+        f->pos = f->buf_off + (rc_ld32(info + 28) - f->buf);
+    }
+    f->buf_off = f->pos;
+    uint32_t left = f->pos < f->size ? f->size - f->pos : 0;
+    f->buf_len = left < f->cap ? left : f->cap;
+    memcpy(rc_ptr(f->buf), f->data + f->pos, f->buf_len);
+    if (info) {
+        mmio_fill_info(f, h, info);
+    }
+    RC_RETURN(c, 0, 3);
+}
+
+/* mmioDescend(h, ck, parent, flags): into the next chunk, or the next one with the asked id
+ * (and form type for RIFF and LIST), within the parent. */
+static void k_mmioDescend(rc_cpu *c)
+{
+    struct mmio_file *f = mmio_get(RC_ARG(c, 0));
+    uint32_t ck = RC_ARG(c, 1), parent = RC_ARG(c, 2), flags = RC_ARG(c, 3);
+    if (!f) {
+        RC_RETURN(c, MMIOERR_CANNOTREAD, 4);
+    }
+    uint32_t end = f->size;
+    if (parent) {
+        uint32_t pend = rc_ld32(parent + 12) + rc_ld32(parent + 4);
+        end = pend < end ? pend : end;
+    }
+    uint32_t want_id = rc_ld32(ck), want_type = rc_ld32(ck + 8);
+    if (flags & MMIO_FINDRIFF) {
+        want_id = FOURCC('R', 'I', 'F', 'F');
+    } else if (flags & MMIO_FINDLIST) {
+        want_id = FOURCC('L', 'I', 'S', 'T');
+    }
+    bool find = (flags & (MMIO_FINDCHUNK | MMIO_FINDRIFF | MMIO_FINDLIST)) != 0;
+    uint32_t at = f->pos;
+    while (at + 8 <= end) {
+        uint32_t id, size, type = 0;
+        memcpy(&id, f->data + at, 4);
+        memcpy(&size, f->data + at + 4, 4);
+        bool form = id == FOURCC('R', 'I', 'F', 'F') || id == FOURCC('L', 'I', 'S', 'T');
+        if (form && at + 12 <= end) {
+            memcpy(&type, f->data + at + 8, 4);
+        }
+        bool match = !find || (id == want_id &&
+                               (!(flags & (MMIO_FINDRIFF | MMIO_FINDLIST)) || type == want_type));
+        if (match) {
+            rc_st32(ck, id);
+            rc_st32(ck + 4, size);
+            rc_st32(ck + 8, type);
+            rc_st32(ck + 12, at + 8);
+            rc_st32(ck + 16, 0);
+            f->pos = at + 8 + (form ? 4 : 0);
+            mmio_reset(f);
+            RC_RETURN(c, 0, 4);
+        }
+        at += 8 + size + (size & 1);
+    }
+    RC_RETURN(c, MMIOERR_CHUNKNOTFOUND, 4);
+}
+
+/* mmioAscend(h, ck, flags): past the end of the chunk (padded to an even size). */
+static void k_mmioAscend(rc_cpu *c)
+{
+    struct mmio_file *f = mmio_get(RC_ARG(c, 0));
+    uint32_t ck = RC_ARG(c, 1);
+    if (!f) {
+        RC_RETURN(c, MMIOERR_CANNOTREAD, 3);
+    }
+    uint32_t size = rc_ld32(ck + 4);
+    f->pos = rc_ld32(ck + 12) + size + (size & 1);
+    mmio_reset(f);
+    RC_RETURN(c, 0, 3);
+}
 
 const rc_import_def rc_winmm_mci_defs[] = {
-    {WMM, "mmioClose", k_mmio_err2},
-    {WMM, "mmioGetInfo", k_mmio_err3},
-    {WMM, "mmioSetInfo", k_mmio_err3},
-    {WMM, "mmioAdvance", k_mmio_err3},
-    {WMM, "mmioDescend", k_mmio_err4},
+    {WMM, "mmioOpenA", k_mmioOpenA},
+    {WMM, "mmioClose", k_mmioClose},
+    {WMM, "mmioRead", k_mmioRead},
     {WMM, "mmioSeek", k_mmioSeek},
+    {WMM, "mmioGetInfo", k_mmioGetInfo},
+    {WMM, "mmioSetInfo", k_mmioSetInfo},
+    {WMM, "mmioAdvance", k_mmioAdvance},
+    {WMM, "mmioDescend", k_mmioDescend},
+    {WMM, "mmioAscend", k_mmioAscend},
     {WMM, "mciSendCommandA", k_mciSendCommandA},
     {WMM, "mciGetErrorStringA", k_mciGetErrorStringA},
     {WMM, "mixerGetNumDevs", k_mixerGetNumDevs},

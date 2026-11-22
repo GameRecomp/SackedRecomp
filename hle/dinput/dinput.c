@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 /*
- * DirectInput (version 3 to 7 interfaces, the A variants): the system keyboard and mouse.
+ * DirectInput (version 3 to 7 interfaces, the A variants, DirectInputCreateEx): the system keyboard
+ * and mouse.
  *
  * The devices follow the input the program gets through user32 (rc_add_input_observer):
  * the keyboard as 256 key states by DirectInput key code (the PC scan code, with 0x80 for
@@ -205,6 +206,18 @@ static void k_DirectInputCreateA(rc_cpu *c)
     RC_RETURN(c, DI_OK, 4);
 }
 
+/* DirectInputCreateEx(instance, version, riid, result, outer): IDirectInput7 (whose layout begins
+ * with the older interfaces'). */
+static void k_DirectInputCreateEx(rc_cpu *c)
+{
+    if (!observing) {
+        rc_add_input_observer(observe);
+        observing = true;
+    }
+    rc_st32(RC_ARG(c, 3), new_object(K_DI));
+    RC_RETURN(c, DI_OK, 5);
+}
+
 static void m_QueryInterface(rc_cpu *c)
 {
     /* Every interface version shares one vtable layout prefix: hand out the same object. */
@@ -243,6 +256,21 @@ static void m_CreateDevice(rc_cpu *c)
     }
     rc_st32(RC_ARG(c, 2), new_object(k));
     RC_RETURN(c, DI_OK, 4);
+}
+
+/* CreateDeviceEx(this, guid, riid, result, outer): IDirectInputDevice7, the same object. */
+static void m_CreateDeviceEx(rc_cpu *c)
+{
+    uint32_t guid = RC_ARG(c, 1);
+    uint32_t d1 = rc_ld32(guid);
+    bool sys = rc_ld16(guid + 4) == 0xd5a0 && rc_ld16(guid + 6) == 0x11cf;
+    enum kind k = sys && d1 == 0x6f1d2b61u ? K_KEYBOARD : sys && d1 == 0x6f1d2b60u ? K_MOUSE : K_FREE;
+    if (k == K_FREE) {
+        rc_st32(RC_ARG(c, 3), 0);
+        RC_RETURN(c, DIERR_DEVICENOTREG, 5);
+    }
+    rc_st32(RC_ARG(c, 3), new_object(k));
+    RC_RETURN(c, DI_OK, 5);
 }
 
 /* EnumDevices(this, type, callback, ref, flags): the keyboard and mouse are not listed;
@@ -383,6 +411,7 @@ static void d_Poll(rc_cpu *c) { RC_RETURN(c, DI_OK, 1); }
 
 const rc_import_def rc_dinput_defs[] = {
     {DINPUT, "DirectInputCreateA", k_DirectInputCreateA},
+    {DINPUT, "DirectInputCreateEx", k_DirectInputCreateEx},
     {COM, "IDirectInput::QueryInterface", m_QueryInterface},
     {COM, "IDirectInput::AddRef", m_AddRef},
     {COM, "IDirectInput::Release", m_Release},
@@ -390,6 +419,7 @@ const rc_import_def rc_dinput_defs[] = {
     {COM, "IDirectInput::EnumDevices", m_EnumDevices},
     {COM, "IDirectInput::GetDeviceStatus", m_GetDeviceStatus},
     {COM, "IDirectInput::Initialize", m_Initialize},
+    {COM, "IDirectInput::CreateDeviceEx", m_CreateDeviceEx},
     {COM, "IDirectInputDevice::QueryInterface", m_QueryInterface},
     {COM, "IDirectInputDevice::AddRef", m_AddRef},
     {COM, "IDirectInputDevice::Release", m_Release},

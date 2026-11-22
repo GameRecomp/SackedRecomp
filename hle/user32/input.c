@@ -959,6 +959,79 @@ static void k_ToAscii(rc_cpu *c)
     RC_RETURN(c, 1, 5);
 }
 
+/* ToAsciiEx(vk, scan, state, out, flags, layout): the US layout, as ToAscii. */
+static void k_ToAsciiEx(rc_cpu *c)
+{
+    uint32_t vk = RC_ARG(c, 0), state = RC_ARG(c, 2), out = RC_ARG(c, 3);
+    int shift = (rc_ld8(state + 0x10) & 0x80) != 0, caps = rc_ld8(state + 0x14) & 1;
+    int ch = (rc_ld8(state + 0x11) & 0x80) ? 0 : key_char(vk, shift, caps);
+    if (!ch) {
+        RC_RETURN(c, 0, 6);
+    }
+    rc_st16(out, (uint16_t)ch);
+    RC_RETURN(c, 1, 6);
+}
+
+/* The one keyboard layout there is: US English. */
+static void k_GetKeyboardLayout(rc_cpu *c) { RC_RETURN(c, 0x04090409u, 1); }
+
+/* Virtual keys and the PC (set 1) scan codes of the US layout. */
+static const struct {
+    uint8_t vk, scan;
+} vk_scan[] = {
+    {0x1b, 0x01}, {'1', 0x02}, {'2', 0x03}, {'3', 0x04}, {'4', 0x05}, {'5', 0x06}, {'6', 0x07},
+    {'7', 0x08}, {'8', 0x09}, {'9', 0x0a}, {'0', 0x0b}, {0xbd, 0x0c}, {0xbb, 0x0d}, {0x08, 0x0e},
+    {0x09, 0x0f}, {'Q', 0x10}, {'W', 0x11}, {'E', 0x12}, {'R', 0x13}, {'T', 0x14}, {'Y', 0x15},
+    {'U', 0x16}, {'I', 0x17}, {'O', 0x18}, {'P', 0x19}, {0xdb, 0x1a}, {0xdd, 0x1b}, {0x0d, 0x1c},
+    {0x11, 0x1d}, {'A', 0x1e}, {'S', 0x1f}, {'D', 0x20}, {'F', 0x21}, {'G', 0x22}, {'H', 0x23},
+    {'J', 0x24}, {'K', 0x25}, {'L', 0x26}, {0xba, 0x27}, {0xde, 0x28}, {0xc0, 0x29}, {0x10, 0x2a},
+    {0xdc, 0x2b}, {'Z', 0x2c}, {'X', 0x2d}, {'C', 0x2e}, {'V', 0x2f}, {'B', 0x30}, {'N', 0x31},
+    {'M', 0x32}, {0xbc, 0x33}, {0xbe, 0x34}, {0xbf, 0x35}, {0xa1, 0x36}, {0x6a, 0x37}, {0x12, 0x38},
+    {0x20, 0x39}, {0x14, 0x3a}, {0x70, 0x3b}, {0x71, 0x3c}, {0x72, 0x3d}, {0x73, 0x3e}, {0x74, 0x3f},
+    {0x75, 0x40}, {0x76, 0x41}, {0x77, 0x42}, {0x78, 0x43}, {0x79, 0x44}, {0x90, 0x45}, {0x91, 0x46},
+    {0x24, 0x47}, {0x26, 0x48}, {0x21, 0x49}, {0x6d, 0x4a}, {0x25, 0x4b}, {0x0c, 0x4c}, {0x27, 0x4d},
+    {0x6b, 0x4e}, {0x23, 0x4f}, {0x28, 0x50}, {0x22, 0x51}, {0x2d, 0x52}, {0x2e, 0x53}, {0x7a, 0x57},
+    {0x7b, 0x58}, {0xa0, 0x2a}, {0xa2, 0x1d}, {0xa4, 0x38}, {0x67, 0x48}, {0x68, 0x49}, {0x64, 0x4b},
+    {0x65, 0x4c}, {0x66, 0x4d}, {0x61, 0x4f}, {0x62, 0x50}, {0x63, 0x51}, {0x60, 0x52}, {0x6e, 0x53},
+    {0x67, 0x47},
+};
+
+/* MapVirtualKeyExA(code, type, layout): 0 key → scan code, 1 scan code → key, 2 key → its
+ * unshifted character (letters in upper case), 3 scan code → key telling left from right. */
+static void k_MapVirtualKeyExA(rc_cpu *c)
+{
+    uint32_t code = RC_ARG(c, 0), type = RC_ARG(c, 1), r = 0;
+    size_t n = sizeof vk_scan / sizeof vk_scan[0];
+    switch (type) {
+    case 0:
+        for (size_t i = 0; i < n && !r; i++) {
+            r = vk_scan[i].vk == code ? vk_scan[i].scan : 0;
+        }
+        break;
+    case 1:
+    case 3:
+        for (size_t i = 0; i < n && !r; i++) {
+            r = vk_scan[i].scan == (code & 0xff) ? vk_scan[i].vk : 0;
+        }
+        if (type == 3 && r == 0x10) {
+            r = (code & 0xff) == 0x36 ? 0xa1 : 0xa0;
+        } else if (type == 3 && r == 0x11) {
+            r = 0xa2;
+        } else if (type == 3 && r == 0x12) {
+            r = 0xa4;
+        }
+        break;
+    case 2: {
+        int ch = key_char(code, 0, 0);
+        r = ch >= 'a' && ch <= 'z' ? (uint32_t)(ch - 32) : (uint32_t)ch;
+        break;
+    }
+    default:
+        break;
+    }
+    RC_RETURN(c, r, 3);
+}
+
 static void k_GetAsyncKeyState(rc_cpu *c)
 {
     rc_pump_events();
@@ -1058,6 +1131,9 @@ const rc_import_def rc_user32_input[] = {
     {U32, "CallNextHookEx", k_CallNextHookEx},
     {U32, "GetKeyboardState", k_GetKeyboardState},
     {U32, "ToAscii", k_ToAscii},
+    {U32, "ToAsciiEx", k_ToAsciiEx},
+    {U32, "GetKeyboardLayout", k_GetKeyboardLayout},
+    {U32, "MapVirtualKeyExA", k_MapVirtualKeyExA},
     {U32, "GetAsyncKeyState", k_GetAsyncKeyState},
     {U32, "GetKeyState", k_GetKeyState},
     {U32, "GetCursorPos", k_GetCursorPos},
