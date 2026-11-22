@@ -558,7 +558,7 @@ static void pace(void)
     uint64_t due = paced_at + 1000u / (uint32_t)max_fps, now = rc_ticks_peek_ms();
     if (now < due && due - now <= 1000u) {
         uint64_t t0 = rc_host_us();
-        rc_thread_sleep((uint32_t)(due - now));
+        rc_thread_wait_frame((uint32_t)(due - now));
         fps_stat.rest += rc_host_us() - t0;
     }
     paced_at = rc_ticks_peek_ms();

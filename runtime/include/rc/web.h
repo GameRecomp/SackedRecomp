@@ -33,6 +33,9 @@ void rc_web_poll(void);
 /* async: wait `ms` milliseconds, the browser running meanwhile. */
 void rc_web_sleep(uint32_t ms);
 
+/* async: wait for the page's next animation frame (the display's refresh). */
+void rc_web_frame(void);
+
 /* async: let the browser run once and come back at once. */
 void rc_web_yield(void);
 

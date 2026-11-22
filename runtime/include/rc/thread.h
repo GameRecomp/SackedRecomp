@@ -42,6 +42,12 @@ void rc_thread_sleep(uint32_t ms);
 void rc_thread_poll(void);
 void rc_thread_work(void);
 
+/* Wait for the next frame of a program limited to so many frames a second, `ms` from now: other
+ * threads run meanwhile. In a browser the wait is for the page's next animation frame instead,
+ * which comes with the display's refresh: its timers are coarse and uneven, and frames made by
+ * them come at uneven times. */
+void rc_thread_wait_frame(uint32_t ms);
+
 /* End the current thread with `code` (ExitThread); on the main thread, the
  * process. Does not return, except in a browser: there the thread's stack
  * cannot be left behind, so it returns with the thread's CPU unwinding

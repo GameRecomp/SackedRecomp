@@ -206,6 +206,9 @@ addToLibrary({
   rc_web_yield__deps: ['$RC'],
   rc_web_yield: () => new Promise((resolve) => RC.post(resolve)),
 
+  rc_web_frame__async: 'auto',
+  rc_web_frame: () => new Promise((resolve) => requestAnimationFrame(() => resolve())),
+
   rc_web_sleep__async: 'auto',
   rc_web_sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 

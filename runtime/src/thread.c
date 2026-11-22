@@ -272,6 +272,16 @@ void rc_thread_sleep(uint32_t ms)
     schedule();
 }
 
+void rc_thread_wait_frame(uint32_t ms)
+{
+#if BACKEND_JSPI
+    (void)ms;
+    rc_web_frame();
+#else
+    rc_thread_sleep(ms);
+#endif
+}
+
 /* Polls without work before a wait counts as spinning (a frame of a game
  * polls about a hundred times), and between rests once it does. */
 #define SPIN_POLLS 500u
