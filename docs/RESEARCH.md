@@ -62,9 +62,12 @@ Whether the localised game builds differ in code beyond their texts is **(open)*
 
 - Both files are served by archive.org through a redirect (`archive.org/download/<item>/<file>` → a mirror
   `dnNNNNNN.ca.archive.org/0/items/<item>/<file>`) and honour `Range` requests (206).
-- From `curl` with an `Origin` header, neither the redirect nor the mirror answered with
-  `Access-Control-Allow-Origin` (2026-11-22). The maintainer reports that the browser download works; checked
-  with a real browser in M8 **(open)**.
+- CORS (checked with Firefox, 2026-11-22): `/download/<item>/<file>` answers other sites only for text files
+  (the mirror sends `Access-Control-Allow-Origin: *` for `.txt`, nothing for `.exe`, `.bin`, `.iso`). The path
+  `/cors/<item>/<file>` answers every file with `Access-Control-Allow-Origin` set to the asking origin, without
+  a redirect: the page downloads from there. A `Range` header makes the browser ask first (preflight), which
+  fails; whole files are fetched. Measured: the Polish Crazy School installer (62 MB) took 4 minutes through
+  `/cors/` from a headless Firefox, against 11 seconds through `/download/` with curl.
 
 ## Gefeuert.exe (Sacked, German)
 
