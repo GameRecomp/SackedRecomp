@@ -9,6 +9,7 @@
 #include "shell32/shell32.h"
 #include "wsock/wsock.h"
 #include "mss32/mss32.h"
+#include "msvcrt/msvcrt.h"
 #include "gdi32/gdi32.h"
 #include "kernel32/k32.h"
 #include "rc/hle_modules.h"
@@ -74,6 +75,8 @@ void rc_hle_winmm(void)
     rc_register_imports(rc_winmm_mci_defs, rc_winmm_mci_count);
 }
 
+void rc_hle_msvcrt(void) { rc_msvcrt_init(); }
+
 void rc_hle_advapi32(void) { rc_register_imports(rc_advapi32_defs, rc_advapi32_count); }
 
 void rc_hle_dinput(void) { rc_register_imports(rc_dinput_defs, rc_dinput_count); }
@@ -102,6 +105,7 @@ void rc_hle_all(void)
     rc_hle_shell32();
     rc_hle_winmm();
     rc_hle_mss32();
+    rc_hle_msvcrt();
     rc_hle_ddraw();
     rc_hle_kernel32();
     rc_hle_user32();

@@ -46,6 +46,10 @@ add_library(rc_hle STATIC
     mss32/rib.c
     winmm/winmm.c
     winmm/mci.c
+    msvcrt/crt.c
+    msvcrt/format.c
+    msvcrt/stdio.c
+    msvcrt/eh.c
 )
 target_include_directories(rc_hle PUBLIC include PRIVATE . "${PROJECT_SOURCE_DIR}/third_party/pl_mpeg")
 target_link_libraries(rc_hle PUBLIC rc_runtime rc_platform)

@@ -17,6 +17,7 @@ void rc_hle_gdi32(void);
 void rc_hle_ddraw(void);
 void rc_hle_mss32(void);
 void rc_hle_winmm(void);
+void rc_hle_msvcrt(void);
 void rc_hle_advapi32(void);
 void rc_hle_dinput(void);
 void rc_hle_dmusic(void);
